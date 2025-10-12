@@ -1,16 +1,13 @@
-import {Entity,PrimaryGeneratedColumn,Column,OneToOne,JoinColumn, UpdateDateColumn, CreateDateColumn} from 'typeorm'
+import {Entity,PrimaryGeneratedColumn,Column,OneToOne,JoinColumn, UpdateDateColumn, CreateDateColumn, OneToMany, ManyToOne} from 'typeorm'
 
 import { User } from './User'
+import { Quiz } from './Quiz';
 
 @Entity("mentors")
 export class Mentors{
 
     @PrimaryGeneratedColumn()
-    candidate_id! : number;
-
-    @OneToOne( ()=> User)
-    @JoinColumn({name:"user_id"})
-    user!:User;
+    mentor_id! : number;
 
     @Column({type:"nvarchar",length:50})
     full_name!:string;
@@ -26,6 +23,13 @@ export class Mentors{
     
             @UpdateDateColumn()
             updated_at! : Date;
+
+     @OneToMany(() => Quiz, (quiz) => quiz.mentor)
+    quizzes!: Quiz[];
+    
+    @ManyToOne(() => User, (user) => user.mentor)
+    @JoinColumn({ name: "user_id" }) 
+    user!: User;
     
 
 }

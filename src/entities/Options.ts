@@ -4,7 +4,7 @@ import { Questions } from "./Questions";
 @Entity({name:"options"})
 export class Options{
     @PrimaryGeneratedColumn()
-    option_id!: Number;
+    option_id!: number;
 
     @Column({
         type:'nvarchar',
@@ -15,7 +15,7 @@ export class Options{
 
     @Column({nullable:false})
     correct_option! : boolean;
-    
+
     @ManyToOne(() => Questions, question => question.options) 
     question! : Questions;
 }

@@ -1,5 +1,4 @@
-import { NVarChar } from "mssql";
-import { Column, Entity, ForeignKey, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { Quiz } from "./Quiz";
 import { Options } from "./Options";
 
@@ -7,7 +6,7 @@ import { Options } from "./Options";
 
 export class Questions {
     @PrimaryGeneratedColumn()
-    question_id!: Number;
+    question_id!: number;
 
     @Column({
         type: 'nvarchar',

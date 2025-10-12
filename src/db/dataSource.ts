@@ -4,6 +4,7 @@ import { User } from "../entities/User";
 import { Quiz } from "../entities/Quiz";
 import { Questions } from "../entities/Questions";
 import { Options } from "../entities/Options";
+import { Mentors } from "../entities/Mentor";
 
 
 const AppDataSource = new DataSource({
@@ -14,7 +15,7 @@ const AppDataSource = new DataSource({
     database : process.env.DB_DATABASE!,
     synchronize: true, //  auto-create/alter tables
     logging: true,
-    entities: [User,Quiz,Questions,Options],
+    entities: [Mentors,Quiz,Questions,Options,User],
     options : {
         encrypt : true,
         trustServerCertificate : true,

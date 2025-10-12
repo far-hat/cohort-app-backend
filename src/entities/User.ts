@@ -1,4 +1,5 @@
-import {Column, Entity, PrimaryGeneratedColumn,CreateDateColumn,UpdateDateColumn } from 'typeorm'
+import {Column, Entity, PrimaryGeneratedColumn,CreateDateColumn,UpdateDateColumn, ManyToOne, OneToOne } from 'typeorm'
+import { Mentors } from './Mentor';
 
 // export enum UserRole {
 //       ADMIN = "admin",
@@ -28,6 +29,9 @@ import {Column, Entity, PrimaryGeneratedColumn,CreateDateColumn,UpdateDateColumn
 
         @Column({default:true})
         isActive?:boolean;
+
+        @OneToOne( () => Mentors, (mentor)=> mentor.user )
+        mentor! : Mentors ;
 
         @CreateDateColumn()
         created_at!: Date;

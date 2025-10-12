@@ -5,6 +5,7 @@ import "dotenv/config";
 import AppDataSource from "./db/dataSource"
 import userRoute from "./routes/userRoute"
 import quizRoutes from "./routes/quizRoutes"
+import questionRoutes from "./routes/questionRoutes"
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use(cors());
 app.use("/api/user",userRoute);
 app.use("/api/quiz",quizRoutes);
+app.use("/api/quiz/:quizId/questions",questionRoutes);
 
 app.get('/test', async(req,res)=>{
     res.json({message : "Hello"})

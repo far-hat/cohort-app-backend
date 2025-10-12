@@ -1,8 +1,10 @@
 import { Request,Response } from "express"
 import { User } from "../entities/User";
+import { Mentors } from "../entities/Mentor";
 import AppDataSource from "../db/dataSource";
 
 const userRepository = AppDataSource.getRepository(User);
+const mentorsRepository = AppDataSource.getRepository(Mentors);
 
 export const createCurrentUser = async (req:Request,res:Response)=> {
     // check if the user exists
@@ -34,18 +36,33 @@ export const createCurrentUser = async (req:Request,res:Response)=> {
 
 export const updateCurrentUser = async (req:Request, res: Response) =>  {
     try {
-        const {role,isActive} =req.body;
-        const user = await userRepository.findOneBy({user_id:Number(req.userId)})
+        const {role} = req.body || "Mentor";
+        const auth0Id = req.body.auth0Id;
 
-        if(!user){
-            return res.status(404).json({message:"User not found"});
+        const user = await userRepository.findOneBy({ auth0Id });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
         }
-        user.role = role;
-        user.isActive = isActive;
-        //user.password_hash = encryptedPassword;
+        
+        if(role == "mentor" ){
+            try {
+                const newMentor = mentorsRepository.create( {
+                    full_name : req.body.full_name,
+                    phone : req.body.phone,
+                    expertise : req.body.expertise,
+                    user: user,
+                });
 
-        await userRepository.save(user);
-        res.send(user);
+                await mentorsRepository.save(newMentor);
+                return res.status(200).send(newMentor);
+
+            } catch (error) {
+                console.log(error);
+                return res.status(500).json({message: "Error updating the user."})
+            }
+
+        }
+        //await userRepository.save(user);
         
     } catch (error) {
         console.log(error);
