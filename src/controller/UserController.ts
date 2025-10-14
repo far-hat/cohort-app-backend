@@ -36,8 +36,8 @@ export const createCurrentUser = async (req:Request,res:Response)=> {
 
 export const updateCurrentUser = async (req:Request, res: Response) =>  {
     try {
-        const {role} = req.body || "Mentor";
-        const auth0Id = req.body.auth0Id;
+        const {role} = req.body;
+        const auth0Id = req.auth0Id;
 
         const user = await userRepository.findOneBy({ auth0Id });
         if (!user) {

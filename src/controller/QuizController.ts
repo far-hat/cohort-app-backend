@@ -60,7 +60,7 @@ export const GetAllQuizzes = async (req:Request,res: Response) => {
 
 export const GetMyQuizzes = async (req: Request, res: Response) => {
     try {
-        const auth0Id = req.body.auth0Id;
+        const auth0Id = req.auth0Id;
 
         const user = await userRepository.findOneBy({ auth0Id });
         if (!user) {
@@ -86,6 +86,9 @@ export const GetMyQuizzes = async (req: Request, res: Response) => {
             },
             relations: ["mentor"],
         });
+        if(!quizzes){
+            return res.status(201).json({message: "No quiz found"})
+        }
 
         return res.status(200).json(quizzes);
     } catch (error) {
@@ -93,3 +96,33 @@ export const GetMyQuizzes = async (req: Request, res: Response) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 };
+
+export const ViewQuiz = async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id;
+        if (!id) {
+            return res.status(400).json({ message: "Quiz ID is required" });
+        }
+        // const quizId = Number(id);
+        
+        // if(isNaN(quizId)) {
+        //     return res.status(400).json({ message: "Invalid Quiz Id" });
+        // }
+        
+        const quiz = await quizRepository.findOne({
+             where: {
+                quiz_id: Number(id)
+            }
+        });
+
+        if(!quiz){
+            return res.status(404).json({ message: "Quiz not found" });
+        }
+
+        return res.status(200).json(quiz);
+
+    } catch (error) {
+        console.error("Error fetching quiz:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
