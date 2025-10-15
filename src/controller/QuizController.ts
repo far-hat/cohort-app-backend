@@ -3,11 +3,15 @@ import { Quiz } from "../entities/Quiz";
 import AppDataSource from "../db/dataSource";
 import { Mentors } from "../entities/Mentor";
 import { User } from "../entities/User";
-import { console } from "inspector";
+import { Options } from "../entities/Options";
+import { Questions } from "../entities/Questions";
+
 
 const quizRepository = AppDataSource.getRepository(Quiz);
 const mentorsRepository = AppDataSource.getRepository(Mentors);
 const userRepository = AppDataSource.getRepository(User);
+const optionsRepository = AppDataSource.getRepository(Options);
+const questionRepository = AppDataSource.getRepository(Questions);
 
 export const CreateMyQuiz = async (req: Request, res: Response) => {
     try {
@@ -103,16 +107,12 @@ export const ViewQuiz = async (req: Request, res: Response) => {
         if (!id) {
             return res.status(400).json({ message: "Quiz ID is required" });
         }
-        // const quizId = Number(id);
-        
-        // if(isNaN(quizId)) {
-        //     return res.status(400).json({ message: "Invalid Quiz Id" });
-        // }
         
         const quiz = await quizRepository.findOne({
              where: {
                 quiz_id: Number(id)
-            }
+            },
+            relations: ['questions', 'questions.options']
         });
 
         if(!quiz){
@@ -126,3 +126,61 @@ export const ViewQuiz = async (req: Request, res: Response) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 }
+
+export const deleteQuiz = async(req: Request, res : Response) => {
+    try {
+        const id = req.params.id;
+        const quizId = Number(id);
+
+        // await optionsRepository.delete({
+        //     question : {
+        //         quiz : {
+        //             quiz_id : quizId
+        //         }
+        //     }
+        //  });
+
+        // await questionRepository.delete({
+        //    quiz : {
+        //     quiz_id : quizId
+        //    } 
+        // });
+
+        // await quizRepository.delete(quizId);
+        
+/////////////////////////////// ===============USING QUERY BUILDER ================ ////////////////
+        // await optionsRepository
+        //     .createQueryBuilder('option')
+        //     .leftJoin('option.question','question')
+        //     .where('quiz.quiz_id = :quizId' , { quizId})
+        //     .delete()
+        //     .execute()
+
+        // await questionRepository
+        //     .createQueryBuilder('question')
+        //     .leftJoin('question.quiz' , 'quiz')
+        //     .where('quiz.quiz_id = :quizId' , {quizId})
+        //     .delete()
+        //     .execute();
+
+        // await quizRepository.delete(quizId);
+
+
+        const questions = await questionRepository.find({
+            where : {
+                quiz : {
+                    quiz_id : quizId
+                }
+            }
+        });
+
+        const questionIds = questions.map( q => q.question_id);
+
+        return res.json(200).json({message : "Quiz deleted succesfully"})
+    } catch (error) {
+        console.error("Error deleting quiz:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+

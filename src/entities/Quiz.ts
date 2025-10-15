@@ -42,7 +42,7 @@ export class Quiz {
     updated_at!: Date;
 
     
-    @OneToMany( ()=> Questions, (question)=> question.quiz , {cascade:true})
+    @OneToMany( ()=> Questions, (question)=> question.quiz , {cascade:true, onDelete : 'CASCADE'})
     questions!:Questions[];
 
     @ManyToOne(() => Mentors, (mentor) => mentor.quizzes)

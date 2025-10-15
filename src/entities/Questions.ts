@@ -17,7 +17,11 @@ export class Questions {
 
     @ManyToOne(() => Quiz, quiz => quiz.questions) quiz!: Quiz;
 
-    @OneToMany(() => Options, option => option.question) options!: Options[];
+    @OneToMany(() => Options, option => option.question , {
+        cascade : true,
+        onDelete : 'CASCADE'
+    }) 
+    options!: Options[];
 
 
 
