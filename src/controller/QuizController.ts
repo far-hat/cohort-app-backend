@@ -6,6 +6,13 @@ import { User } from "../entities/User";
 import { Options } from "../entities/Options";
 import { Questions } from "../entities/Questions";
 
+export type CreateQuizRequest = {
+    course_name : string;
+    quiz_description : string;
+    status: string;
+    start_datetime? : string;
+    end_datetime? : string;
+};
 
 const quizRepository = AppDataSource.getRepository(Quiz);
 const mentorsRepository = AppDataSource.getRepository(Mentors);
@@ -147,7 +154,7 @@ export const deleteQuiz = async(req: Request, res : Response) => {
         // });
 
         // await quizRepository.delete(quizId);
-        
+
 /////////////////////////////// ===============USING QUERY BUILDER ================ ////////////////
         // await optionsRepository
         //     .createQueryBuilder('option')
@@ -175,10 +182,54 @@ export const deleteQuiz = async(req: Request, res : Response) => {
         });
 
         const questionIds = questions.map( q => q.question_id);
+    
+        if(questionIds.length > 0){
+            await optionsRepository
+            .createQueryBuilder()
+            .delete()
+            .where("question_id IN (:...questionIds)",{questionIds})
+            .execute();
+        }
+
+        await questionRepository
+            .createQueryBuilder()
+            .delete()
+            .where("quiz_id = :quizId", {quizId})
+            .execute();
+        
+        await quizRepository.delete(quizId);
 
         return res.json(200).json({message : "Quiz deleted succesfully"})
     } catch (error) {
         console.error("Error deleting quiz:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const editQuiz = async(req : Request, res : Response) => {
+    try {
+        const id = req.params.id;
+        const quizId = Number(id);
+        const quizData : CreateQuizRequest = req.body;
+
+        const quiz = await quizRepository.findOne({where : {quiz_id : quizId}});
+
+        if(!quiz) {
+            return res.status(404).json({message : "Quiz not found"});
+        }
+
+        await quizRepository
+            .createQueryBuilder()
+            .update()
+            .set(quizData)
+            .where("quiz_id = :quizId",{quizId})
+            .execute();
+            
+
+        return res.status(200).json({message:"Quiz updated"});
+
+    } catch (error) {
+        console.error("Error updating quiz:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
 }

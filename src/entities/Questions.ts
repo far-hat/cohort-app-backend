@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { Quiz } from "./Quiz";
 import { Options } from "./Options";
 
@@ -15,7 +15,9 @@ export class Questions {
     })
     question_text!: string;
 
-    @ManyToOne(() => Quiz, quiz => quiz.questions) quiz!: Quiz;
+    @ManyToOne(() => Quiz, quiz => quiz.questions)
+    @JoinColumn({ name: 'quiz_id' })
+    quiz!: Quiz;
 
     @OneToMany(() => Options, option => option.question , {
         cascade : true,

@@ -2,9 +2,11 @@ import { Request,Response } from "express"
 import { User } from "../entities/User";
 import { Mentors } from "../entities/Mentor";
 import AppDataSource from "../db/dataSource";
+import { Candidate } from "../entities/Candidate";
 
 const userRepository = AppDataSource.getRepository(User);
 const mentorsRepository = AppDataSource.getRepository(Mentors);
+const candidatesRepository = AppDataSource.getRepository(Candidate);
 
 export const createCurrentUser = async (req:Request,res:Response)=> {
     // check if the user exists
@@ -43,29 +45,84 @@ export const updateCurrentUser = async (req:Request, res: Response) =>  {
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-        
-        if(role == "mentor" ){
-            try {
-                const newMentor = mentorsRepository.create( {
-                    full_name : req.body.full_name,
-                    phone : req.body.phone,
-                    expertise : req.body.expertise,
-                    user: user,
-                });
+        user.role = role;
+        await userRepository.save(user);
 
-                await mentorsRepository.save(newMentor);
-                return res.status(200).send(newMentor);
-
-            } catch (error) {
-                console.log(error);
-                return res.status(500).json({message: "Error updating the user."})
-            }
-
+        switch(role.toLowerCase()){
+            case "mentor" : 
+                return await handleMentorRegistration(user,req.body,res);
+            case "candidate" :
+                return await handleCandidateRegistration(user,req.body,res);
+            case "admin" : 
+                return res.status(200).json(user);
+            default:
+                return res.status(400).json({message : "Invalid role specified"});
         }
-        //await userRepository.save(user);
         
     } catch (error) {
         console.log(error);
         res.status(500).json({message:"Error updating user"});
+    }
+};
+
+const handleMentorRegistration= async(user : User, data: any, res:Response) => {
+    try {
+        const {full_name,expertise,phone} = data;
+
+        const existingMentor = await mentorsRepository.findOne({
+            where: { user : {user_id : user.user_id}}
+        });
+
+        if(existingMentor){
+            existingMentor.full_name = full_name;
+            existingMentor.expertise = expertise;
+            existingMentor.phone = phone;
+            await mentorsRepository.save(existingMentor);
+            return res.status(200).json({user,mentor:existingMentor});
+        }
+        else{
+            const newMentor = mentorsRepository.create({
+                full_name : full_name,
+                expertise : expertise,
+                phone: phone,
+                user : user
+            });
+            await mentorsRepository.save(newMentor);
+            return res.status(201).json({user,mentor:newMentor});
+        }
+    } catch (error) {
+        console.error("Mentor creation error");
+        return res.status(500).json({message : "Error creating mentor"});
+    }
+}
+
+const handleCandidateRegistration = async(user : User, data : any , res : Response) => {
+    try {
+        const {full_name,phone,education_level} = data;
+        const existingCandidate = await candidatesRepository.findOne({
+            where: { user : {user_id : user.user_id}}
+        });
+        
+        if(existingCandidate){
+            existingCandidate.full_name = full_name;
+            existingCandidate.phone = phone;
+            existingCandidate.education_level = education_level;
+            await candidatesRepository.save(existingCandidate);
+            return res.status(200).json({user,candidate:existingCandidate});
+
+        }
+        else{
+            const newCandidate = candidatesRepository.create({
+                full_name : full_name,
+                phone : phone,
+                education_level : education_level,
+                
+            });
+            await candidatesRepository.save(newCandidate);
+            return res.status(201).json({user,candidate : newCandidate});
+        }
+    } catch (error) {
+        console.error("Candidate creation error:", error);
+        return res.status(500).json({ message: "Error creating candidate profile" });
     }
 }

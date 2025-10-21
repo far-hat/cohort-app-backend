@@ -8,6 +8,7 @@ const quizRepository = AppDataSource.getRepository(Quiz);
 
 
 
+
 export const AddQuestions = async(req:Request , res: Response) => {
     const { quizId } = req.params;
     const quiz = await quizRepository.findOne({
@@ -57,6 +58,3 @@ export const AddQuestions = async(req:Request , res: Response) => {
 
 }
 
-export const GetQuestions = async(req : Request, res: Response) => {
-    
-}

@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
 import { Questions } from "./Questions";
 
 @Entity({name:"options"})
@@ -17,5 +17,6 @@ export class Options{
     correct_option! : boolean;
 
     @ManyToOne(() => Questions, question => question.options) 
+    @JoinColumn({ name: 'question_id' })
     question! : Questions;
 }
