@@ -7,8 +7,8 @@ const router =express.Router();
 // api/user
 router.post("/",jwtCheck,createCurrentUser);
 
-//api/user-profile
-router.put("/update",jwtCheck,jwtParse,validateUserRequest,updateCurrentUser);
+//api/user/update
+router.put("/update",jwtCheck,jwtParse,updateCurrentUser);
 
 export default router;
 

@@ -1,6 +1,7 @@
-import {Column, Entity, PrimaryGeneratedColumn,CreateDateColumn,UpdateDateColumn, ManyToOne, OneToOne } from 'typeorm'
+import {Column, Entity, PrimaryGeneratedColumn,CreateDateColumn,UpdateDateColumn, ManyToOne, OneToOne, OneToMany } from 'typeorm'
 import { Mentors } from './Mentor';
 import { Candidate } from './Candidate';
+import { QuizAttempt } from './QuizAttempt';
 
 // export enum UserRole {
 //       ADMIN = "admin",
@@ -30,6 +31,9 @@ import { Candidate } from './Candidate';
 
         @Column({default:true})
         isActive?:boolean;
+
+        @OneToMany(() => QuizAttempt, (attempt) => attempt.user)
+        quiz_attempts!: QuizAttempt[];
 
         @OneToOne( () => Mentors, (mentor)=> mentor.user )
         mentor! : Mentors ;

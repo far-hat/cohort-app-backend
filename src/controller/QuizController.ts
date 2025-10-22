@@ -5,6 +5,8 @@ import { Mentors } from "../entities/Mentor";
 import { User } from "../entities/User";
 import { Options } from "../entities/Options";
 import { Questions } from "../entities/Questions";
+import { QuizAttempt } from "../entities/QuizAttempt";
+import { QuizAnswer } from "../entities/QuizAnswer";
 
 export type CreateQuizRequest = {
     course_name : string;
@@ -19,6 +21,8 @@ const mentorsRepository = AppDataSource.getRepository(Mentors);
 const userRepository = AppDataSource.getRepository(User);
 const optionsRepository = AppDataSource.getRepository(Options);
 const questionRepository = AppDataSource.getRepository(Questions);
+const quizAttemptRepository = AppDataSource.getRepository(QuizAttempt);
+const quizAnswerRepository = AppDataSource.getRepository(QuizAnswer);
 
 export const CreateMyQuiz = async (req: Request, res: Response) => {
     try {
@@ -233,5 +237,94 @@ export const editQuiz = async(req : Request, res : Response) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 }
+export type QuizSubmissionRequest = {
+    responses : Record<string,string>;
+}
 
+export const submitQuiz = async (req:Request, res:Response) => {
+    try {
+        const {responses} : QuizSubmissionRequest = req.body;
+        const quizId  = req.params.id;
+        const auth0Id = req.auth0Id;
+
+        if(!quizId || !responses || Object.keys(responses).length === 0){
+            return res.status(400).json( { message : "Quiz ID and responses are required"});
+        }
+
+        const user = await userRepository.findOneBy({auth0Id});
+        if(!user){
+            return res.status(404).json({message : "User not found"});
+        }
+
+        const quiz = await quizRepository.findOne({
+            where:{ quiz_id : Number(quizId)},
+            relations : ['questions','questions.options']
+        })
+
+        if(!quiz){
+            return res.status(404).json({nessage : "Quiz not found"});
+        }
+
+        await AppDataSource.transaction( async (transactionalEntityManager) => {
+            const attempt = new QuizAttempt();
+            attempt.user = user;
+            attempt.quiz = quiz;
+            attempt.total_questions = quiz.questions.length;
+
+
+            let correctAnswers = 0;
+            const answers : QuizAnswer [] = [];
+
+            for(const [questionId,selectedOptionText] of Object.entries(responses) ){
+                const question = await questionRepository.findOne({where: {question_id : Number(questionId)},
+                relations: ['options']
+            });
+
+            if(!question){
+                console.warn(`Question ${questionId} not found`);
+                continue;
+            }
+
+            const selectedOption = question.options.find(
+                option => option.option_text === selectedOptionText
+            );
+
+            if(!selectedOption){
+              console.warn(`Option "${selectedOptionText}" not found for question ${questionId}`);
+                continue;  
+            }
+            const isCorrect = selectedOption.correct_option;
+            if(isCorrect){
+                correctAnswers++;
+            }
+
+            const answer = new QuizAnswer();
+            answer.question = question;
+            answer.selected_option = selectedOption;
+            answer.is_correct = isCorrect;
+            answer.attempt = attempt;
+
+            answers.push(answer);
+            }
+
+            attempt.score = correctAnswers;
+            attempt.percentage = (correctAnswers/attempt.total_questions)*100;
+
+            await transactionalEntityManager.save(QuizAttempt,attempt);
+            await transactionalEntityManager.save(QuizAnswer,answers);
+
+
+            return res.status(201).json({
+                message : "Quiz submitted successfully"
+            });
+            
+        })
+    } catch (error) {
+         console.error("Quiz submission error:", error);
+        return res.status(500).json({ 
+            message: "Error submitting quiz attempt",
+            error: error instanceof Error ? error.message : "Unknown error"
+        });
+    }
+}
 

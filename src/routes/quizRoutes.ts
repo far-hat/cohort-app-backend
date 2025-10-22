@@ -1,5 +1,5 @@
 import express from 'express';
-import { CreateMyQuiz, deleteQuiz, editQuiz, GetAllQuizzes, GetMyQuizzes, ViewQuiz } from '../controller/QuizController';
+import { CreateMyQuiz, deleteQuiz, editQuiz, GetAllQuizzes, GetMyQuizzes, submitQuiz, ViewQuiz } from '../controller/QuizController';
 import { jwtCheck, jwtParse } from '../middleware/auth';
 
 const router = express.Router();
@@ -15,5 +15,7 @@ router.get("/view-quiz/:id",ViewQuiz);
 router.delete("/delete/:id",deleteQuiz);
 
 router.put("/edit/:id",editQuiz);
+
+router.post("/attempt/:id",submitQuiz);
 
 export default router;

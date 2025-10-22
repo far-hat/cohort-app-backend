@@ -1,6 +1,7 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Questions } from "./Questions";
 import { Mentors } from "./Mentor";
+import { QuizAttempt } from "./QuizAttempt";
 
 @Entity({ name: "quiz" })
 export class Quiz {
@@ -48,5 +49,8 @@ export class Quiz {
     @ManyToOne(() => Mentors, (mentor) => mentor.quizzes)
     @JoinColumn({ name: "mentor_id" }) 
     mentor!: Mentors; 
+
+    @OneToMany(() => QuizAttempt, (attempt) => attempt.quiz)
+    attempts!: QuizAttempt[];
 
 }
