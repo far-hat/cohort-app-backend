@@ -1,8 +1,10 @@
 import express from 'express';
-import { AddQuestions } from '../controller/QuestionsController';
+import { AddQuestions, EditQuestions } from '../controller/QuestionsController';
 
 const router = express.Router({ mergeParams: true });
-//api/my/quiz
+
 router.post("/add",AddQuestions);
+
+router.put("/edit",EditQuestions);
 
 export default router;

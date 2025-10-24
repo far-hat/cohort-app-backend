@@ -1,0 +1,223 @@
+
+//Update Existing Questions & Options
+{
+    [
+    {
+        "question_id": 20,
+        "question_text": "What is the fear of long words called? (Updated)",
+        "options": [
+            {
+                "option_id": 42,
+                "option_text": "Hippopotomonstrosesquippedaliophobia",
+                "correct_option": false
+            },
+            {
+                "option_id": 43,
+                "option_text": "Pneumonoultramicroscopicsilicovolcanoconiosis",
+                "correct_option": true
+            }
+        ]
+    },
+    {
+        "question_id": 21,
+        "question_text": "Which planet spins clockwise? (Updated)",
+        "options": [
+            {
+                "option_id": 44,
+                "option_text": "Earth",
+                "correct_option": false
+            },
+            {
+                "option_id": 45,
+                "option_text": "Mars",
+                "correct_option": false
+            },
+            {
+                "option_id": 46,
+                "option_text": "Venus",
+                "correct_option": true
+            }
+        ]
+    }
+]
+}
+
+// Create New Question + Update Existing + Delete One
+{
+    [
+    {
+        "question_id": 20,
+        "question_text": "What is the fear of long words called? (Modified)",
+        "options": [
+            {
+                "option_id": 42,
+                "option_text": "Hippopotomonstrosesquippedaliophobia (Updated)",
+                "correct_option": true
+            },
+            {
+                "option_id": 43,
+                "option_text": "Pneumonoultramicroscopicsilicovolcanoconiosis",
+                "correct_option": false
+            }
+        ]
+    },
+    {
+        "question_id": 0,
+        "question_text": "NEW: What is the largest ocean on Earth?",
+        "options": [
+            {
+                "option_id": 0,
+                "option_text": "Atlantic Ocean",
+                "correct_option": false
+            },
+            {
+                "option_id": 0,
+                "option_text": "Indian Ocean",
+                "correct_option": false
+            },
+            {
+                "option_id": 0,
+                "option_text": "Pacific Ocean",
+                "correct_option": true
+            }
+        ]
+    }
+]
+}
+//Create Multiple New Questions
+
+{
+    [
+    {
+        "question_id": 0,
+        "question_text": "What is the capital of Japan?",
+        "options": [
+            {
+                "option_id": 0,
+                "option_text": "Seoul",
+                "correct_option": false
+            },
+            {
+                "option_id": 0,
+                "option_text": "Beijing",
+                "correct_option": false
+            },
+            {
+                "option_id": 0,
+                "option_text": "Tokyo",
+                "correct_option": true
+            }
+        ]
+    },
+    {
+        "question_id": 0,
+        "question_text": "How many elements are in the periodic table?",
+        "options": [
+            {
+                "option_id": 0,
+                "option_text": "118",
+                "correct_option": true
+            },
+            {
+                "option_id": 0,
+                "option_text": "92",
+                "correct_option": false
+            },
+            {
+                "option_id": 0,
+                "option_text": "150",
+                "correct_option": false
+            }
+        ]
+    }
+]
+
+}
+
+//Update Options Only 
+
+{
+    [
+    {
+        "question_id": 20,
+        "question_text": "What is the fear of long words called?",
+        "options": [
+            {
+                "option_id": 42,
+                "option_text": "Hippopotomonstrosesquippedaliophobia",
+                "correct_option": true
+            },
+            {
+                "option_id": 43,
+                "option_text": "Pneumonoultramicroscopicsilicovolcanoconiosis",
+                "correct_option": false
+            },
+            {
+                "option_id": 0,
+                "option_text": "Sesquipedalophobia",
+                "correct_option": false
+            }
+        ]
+    },
+    {
+        "question_id": 21,
+        "question_text": "Which planet spins clockwise?",
+        "options": [
+            {
+                "option_id": 44,
+                "option_text": "Earth",
+                "correct_option": false
+            },
+            {
+                "option_id": 46,
+                "option_text": "Venus",
+                "correct_option": true
+            }
+        ]
+    }
+]
+}
+
+//Mix of All Operations
+
+{
+    [
+    {
+        "question_id": 20,
+        "question_text": "What is the fear of long words called? (Edited)",
+        "options": [
+            {
+                "option_id": 42,
+                "option_text": "Hippopotomonstrosesquippedaliophobia",
+                "correct_option": true
+            },
+            {
+                "option_id": 0,
+                "option_text": "New Option Added",
+                "correct_option": false
+            }
+        ]
+    },
+    {
+        "question_id": 0,
+        "question_text": "BRAND NEW: What is the speed of light?",
+        "options": [
+            {
+                "option_id": 0,
+                "option_text": "299,792,458 m/s",
+                "correct_option": true
+            },
+            {
+                "option_id": 0,
+                "option_text": "150,000,000 m/s",
+                "correct_option": false
+            },
+            {
+                "option_id": 0,
+                "option_text": "500,000,000 m/s",
+                "correct_option": false
+            }
+        ]
+    }
+]
+}
