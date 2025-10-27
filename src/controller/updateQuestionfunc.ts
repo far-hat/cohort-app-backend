@@ -23,7 +23,6 @@ type OptionRequest = {
 
 const quizRepository = AppDataSource.getRepository(Quiz);
 
-const questionRepository = AppDataSource.getRepository(Questions);
 
 
 export const updateQuestions = async (questions: QuestionUpdateRequest[], quizId: number,) => {
