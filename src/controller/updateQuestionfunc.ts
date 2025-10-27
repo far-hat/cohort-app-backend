@@ -3,8 +3,8 @@ import AppDataSource from "../db/dataSource";
 import { Questions } from "../entities/Questions";
 import { Quiz } from "../entities/Quiz";
 import { Options } from "../entities/Options";
-import { error } from "console";
 import { In } from "typeorm";
+import { QuizAnswer } from "../entities/QuizAnswer";
 
 export type QuestionsUpdateRequest = {
     questions: QuestionUpdateRequest[]
@@ -27,7 +27,7 @@ const questionRepository = AppDataSource.getRepository(Questions);
 
 
 export const updateQuestions = async (questions: QuestionUpdateRequest[], quizId: number,) => {
-
+    console.log(typeof(questions));
     const queryRunner = AppDataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -44,7 +44,7 @@ export const updateQuestions = async (questions: QuestionUpdateRequest[], quizId
             return "Quiz not found";
         }
         //fetch all questions
-
+        
         const existingQuestions = quiz.questions;
         const existingQuestionsMap = new Map(existingQuestions.map(q => [q.question_id, q]));
 
@@ -73,6 +73,12 @@ export const updateQuestions = async (questions: QuestionUpdateRequest[], quizId
         }
 
         if (questionsIdsToDelete.length > 0) {
+            
+            await queryRunner.manager.delete(QuizAnswer,{ 
+               question: { question_id: In(questionsIdsToDelete) }
+            })
+      
+
             await queryRunner.manager.delete(Options,{ 
         question: { question_id: In(questionsIdsToDelete) } })
 
@@ -181,6 +187,9 @@ async function updateOptionsForQuestion(queryRunner: any, questionData: Question
     }
 
     if (optionIdsToDelete.length > 0) {
+        //  await queryRunner.manager.delete(QuizAnswer,{ 
+        //        question: { question_id: In(questionsIdsToDelete) }
+        //     })
         await queryRunner.manager
                 .createQueryBuilder()
                 .delete()

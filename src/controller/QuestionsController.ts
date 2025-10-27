@@ -77,12 +77,12 @@ export const EditQuestions = async (req: Request, res: Response) => {
     //commit transaction
     try {
         const { quizId } = req.params;
-        const questions = req.body 
+        const {questions} = req.body; 
         //as { questions: QuestionUpdateRequest[] };
         // if (!Array.isArray(questions)) {
         //    return res.status(400).json("Expected an array of questions.");
         // }
-
+        console.log(`Type of questions ${typeof(questions)}`)
         const updatedQuestions = await updateQuestions(questions, Number(quizId));
         return res.json({ success: true, message: "Questions updated successfully", data: updatedQuestions });
     }
