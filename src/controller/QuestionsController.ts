@@ -13,7 +13,7 @@ const quizRepository = AppDataSource.getRepository(Quiz);
 
 export const AddQuestions = async (req: Request, res: Response) => {
     const { quizId } = req.params;
-    const { questions } = req.body;
+    const  {questions}  = req.body;
     console.log(questions);
 
     if (!Array.isArray(questions)) {

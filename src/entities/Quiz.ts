@@ -3,6 +3,7 @@ import { Questions } from "./Questions";
 import { Mentors } from "./Mentor";
 import { QuizAttempt } from "./QuizAttempt";
 
+
 @Entity({ name: "quiz" })
 export class Quiz {
     @PrimaryGeneratedColumn()
@@ -27,13 +28,33 @@ export class Quiz {
         length: 50,
         nullable: true,
     })
-    status!: string;
+    status!: string;// can be draft, published or archived
+
+    //real-time session status field
+    @Column({
+        type : "varchar",
+        length: 20,
+        default : "scheduled"
+    })
+    session_state! : string; // can be scheduled,inactive , active, paused, ended.
+ 
+    @Column({
+        type: 'datetime',
+        nullable : true
+    })
+    scheduled_start! : Date;
 
     @Column({ type: 'datetime', nullable: true })
     start_datetime!: Date;
 
     @Column({ type: 'datetime', nullable: true })
     end_datetime!: Date;
+
+    @Column({
+        type : 'int',
+        nullable :true
+    })
+    duration! : number;
 
 
     @CreateDateColumn()
@@ -52,5 +73,29 @@ export class Quiz {
 
     @OneToMany(() => QuizAttempt, (attempt) => attempt.quiz)
     attempts!: QuizAttempt[];
+
+    isActive() : boolean{
+        return this.session_state === 'active' || this.session_state === 'paused';
+    }
+
+    isScheduled() : boolean{
+        return this.session_state === 'scheduled'
+    }
+
+    canStart() : boolean{
+        return ['draft','scheduled'].includes(this.session_state);
+    }
+
+    canPause(): boolean {
+        return this.session_state === 'active';
+    }
+
+    canResume(): boolean {
+        return this.session_state === 'paused';
+    }
+
+    canStop(): boolean {
+        return ['active', 'paused'].includes(this.session_state);
+    }
 
 }

@@ -1,30 +1,39 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
-//import {connectDB} from "./db/connection"
+
 import AppDataSource from "./db/dataSource"
 import userRoute from "./routes/userRoute"
 import quizRoutes from "./routes/quizRoutes"
 import questionRoutes from "./routes/questionRoutes"
+import quizSessionRoutes from "./routes/quizSessionRoutes"
+import http from "http" ;
+import { SocketService } from "./services/socketServices";
+
 
 const app = express();
-
-const PORT = process.env.PORT || 6500;
-
 app.use(express.json());
 app.use(cors());
+
+
 app.use("/api/user",userRoute);
 app.use("/api/quiz",quizRoutes);
 app.use("/api/quiz/:quizId/questions",questionRoutes);
+app.use("/api/quiz-session",quizSessionRoutes);
 
 app.get('/test', async(req,res)=>{
     res.json({message : "Hello"})
 })
 
+const server = http.createServer(app);
+export const socketService = new SocketService(server);
+
+const PORT = process.env.PORT || 6500;
+
 AppDataSource.initialize().then(()=>{
   console.log("Data source has been initialized!");
-  app.listen(PORT, ()=>{
-    console.log(`server started at ${PORT}`)
+  server.listen(PORT, ()=>{
+    console.log(`Backend and Socket.IO running at ${PORT}`)
   })
 }).catch((err:any)=>{
   console.error("Error during Data Source initialization",err)
