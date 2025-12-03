@@ -11,7 +11,7 @@ const candidatesRepository = AppDataSource.getRepository(Candidate);
 export const createCurrentUser = async (req:Request,res:Response)=> {
     // check if the user exists
     try {
-        const {auth0Id }= req.body;
+        const {auth0Id }= req.body.auth0Id;
         
         const existingUser = await userRepository.findOneBy({auth0Id});
         if(existingUser){
@@ -19,7 +19,7 @@ export const createCurrentUser = async (req:Request,res:Response)=> {
         }
         //create if user does not exist
         const newUser = userRepository.create({
-            auth0Id:req.body.auth0Id,
+            auth0Id : req.body.auth0Id,
             user_name:req.body.user_name || req.body.email.split("@")[0],
             email:req.body.email,
         });

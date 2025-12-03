@@ -26,7 +26,7 @@ const quizAnswerRepository = AppDataSource.getRepository(QuizAnswer);
 
 export const CreateMyQuiz = async (req: Request, res: Response) => {
     try {
-        const auth0Id  = "google-oauth2|101280210633986786527";
+        const auth0Id  = req.body;
 
         const user = await userRepository.findOneBy({ auth0Id });
         if (!user) {

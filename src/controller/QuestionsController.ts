@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import { Questions } from "../entities/Questions";
 import { Options } from "../entities/Options";
 import { Quiz } from "../entities/Quiz";
-import { QuestionUpdateRequest, QuestionsUpdateRequest, updateQuestions } from "./updateQuestionfunc";
+import { QuestionUpdateRequest, QuestionsUpdateRequest, updateQuestions } from "../utils/updateQuestionfunc";
 
 
 const quizRepository = AppDataSource.getRepository(Quiz);

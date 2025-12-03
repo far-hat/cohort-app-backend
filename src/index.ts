@@ -29,6 +29,7 @@ app.get('/test', async(req,res)=>{
 })
 
 const server = http.createServer(app);
+
 export const socketService = new SocketService(server);
 
 const PORT = process.env.PORT || 6500;
