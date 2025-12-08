@@ -26,7 +26,7 @@ const quizAnswerRepository = AppDataSource.getRepository(QuizAnswer);
 
 export const CreateMyQuiz = async (req: Request, res: Response) => {
     try {
-        const auth0Id  = req.body;
+        const auth0Id  = req.body.auth0Id;
 
         const user = await userRepository.findOneBy({ auth0Id });
         if (!user) {

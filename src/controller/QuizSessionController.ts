@@ -6,10 +6,24 @@ export class QuizSessionController {
 
     async startQuiz(req : Request, res : Response) {
         try {
+            console.log(` START QUIZ API CALLED: quiz_id = ${req.params.quiz_id}`);
+            console.log(` Headers:`, req.headers);
+
             const {quiz_id} = req.params;
             
             const id = Number(quiz_id);
-            const quiz = await this.quizSessionService.startQuiz(Number(id));
+
+            if (isNaN(id)) {
+                console.log(`Invalid quiz ID: ${quiz_id}`);
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid quiz ID format"
+                });
+            }
+
+            const quiz = await this.quizSessionService.startQuiz(id);
+
+             console.log(`✅ Quiz ${id} started successfully`);
 
             res.json({
                 success: true,
@@ -17,6 +31,8 @@ export class QuizSessionController {
                 data : quiz
             })
         } catch (error:any) {
+            console.error(` START QUIZ ERROR for quiz ${req.params.quiz_id}:`, error);
+            console.error(` Error stack:`, error.stack);
             res.status(400).json({
                 success : false,
                 message : error.message
