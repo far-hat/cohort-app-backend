@@ -24,6 +24,7 @@ export class QuizSessionService {
                 console.log("Quiz not found :", quizId);
                 throw new Error("Quiz not found");
             }
+
             console.log(`Quiz found:`, {
                 id: quiz.quiz_id,
                 course: quiz.course_name,
@@ -40,7 +41,10 @@ export class QuizSessionService {
                 throw new Error(`Quiz cannot be started from ${quiz.session_state} state`);
             }
 
+            
+
             quiz.session_state = 'active';
+            quiz.status = 'Active';
             quiz.start_datetime = new Date();
 
             const savedQuiz = await this.quizRepository.save(quiz);
@@ -48,15 +52,15 @@ export class QuizSessionService {
             console.log("Quiz saved successfully");
 
 
-            //Broadcast to Socket
-            const clientCount = socketService.broadcastToQuiz(quizId, 'quiz_started', {
-                state: 'active',
-                quizId,
-                started_at: quiz.start_datetime,
-                duration: quiz.duration
-            });
+            // //Broadcast to Socket
+            // const clientCount = socketService.broadcastToQuiz(quizId, 'quiz_started', {
+            //     state: 'active',
+            //     quizId,
+            //     started_at: quiz.start_datetime,
+            //     duration: quiz.duration
+            // });
 
-            console.log(`Broadcast to ${clientCount} clients`);
+            // console.log(`Broadcast to ${clientCount} clients`);
 
             socketService.startQuiz(
                 quizId,

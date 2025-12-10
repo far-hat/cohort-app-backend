@@ -5,6 +5,8 @@ export class SocketService {
   private quizRooms = new Map<number, Set<string>>(); // quiz_id -> client_ids
   private quizTimers = new Map<number, NodeJS.Timeout>();
 
+  private quizMeta = new Map<number, { totalQuestions: number }>();
+
   private candidateProgress = new Map<number, Map<string, {
     socketId: string;
     candidateName: string;
@@ -14,24 +16,51 @@ export class SocketService {
     lastActivity: Date;
   }>>();
 
-  //  when quiz starts
+  // When quiz starts - send ALL questions to candidates
   startQuizForCandidates(quizId: number, duration: number, questions: any[]) {
-    // make sure candidates room exists
+    if (!questions || !Array.isArray(questions)) {
+      console.error(`❌ No questions provided for quiz ${quizId}`);
+      questions = [];
+    }
+
+    console.log(`🚀 Starting quiz ${quizId} with ${questions.length} questions`);
+
+    // Emit to candidates
     this.io.to(`candidates_${quizId}`).emit("quiz_started", {
       state: "active",
       quizId,
       duration,
-      questions, // sending all questions at once
+      questions: questions.map((q, index) => ({
+        question_id: q.question_id,
+        question_text: q.question_text,
+        options: q.options || [],
+        question_number: index + 1,
+        total_questions: questions.length
+      })),
+      startedAt: new Date()
+    });
+
+    // Emit to mentor too
+    this.io.to(`mentor_${quizId}`).emit("quiz_started", {
+      state: "active",
+      quizId,
+      duration,
+      questions: questions.map((q, index) => ({
+        question_id: q.question_id,
+        question_text: q.question_text,
+        question_number: index + 1,
+        total_questions: questions.length
+      })),
       startedAt: new Date()
     });
 
     // Start countdown timer
     this.startQuizTimer(quizId, duration);
 
-    console.log(`🚀 Quiz ${quizId} started for candidates with ${questions?.length || 0} questions`);
+    console.log(`🚀 Quiz ${quizId} started for candidates with ${questions.length} questions`);
   }
 
-  //Timer implementation
+  // Timer implementation
   private startQuizTimer(quizId: number, duration: number) {
     // Clear existing timer if any
     if (this.quizTimers.has(quizId)) {
@@ -64,6 +93,7 @@ export class SocketService {
     }, 1000);
 
     this.quizTimers.set(quizId, timer);
+    console.log(`⏰ Timer started for quiz ${quizId}: ${duration} seconds`);
   }
 
   // End quiz method
@@ -100,7 +130,6 @@ export class SocketService {
         methods: ["GET", "POST"],
         credentials: true,
       },
-      // connection state recovery
       connectionStateRecovery: {
         maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
         skipMiddlewares: true,
@@ -120,7 +149,7 @@ export class SocketService {
     this.io.on("connection", (socket) => {
       console.log("Client connected:", socket.id);
 
-      // ✅ FIXED: Join quiz room - SIMPLIFIED
+      // ✅ Join quiz room
       socket.on("join_quiz", (quizId: number) => {
         if (!quizId) {
           console.log("No quizId provided for join_quiz");
@@ -128,7 +157,10 @@ export class SocketService {
         }
 
         socket.join(`quiz_${quizId}`);
-        socket.join(`mentor_${quizId}`); // Default to mentor room
+        socket.on("join_quiz", (quizId) => {
+          socket.join(`quiz_${quizId}`);
+        });
+
 
         if (!this.quizRooms.has(quizId)) {
           this.quizRooms.set(quizId, new Set());
@@ -137,10 +169,9 @@ export class SocketService {
         this.quizRooms.get(quizId)!.add(socket.id);
 
         console.log(`Client ${socket.id} joined quiz ${quizId}`);
-        console.log(`Room quiz_${quizId} now has: ${this.quizRooms.get(quizId)?.size} clients`);
       });
 
-      // Candidate joins as a participant - SEPARATE EVENT HANDLER
+      // Candidate joins as a participant
       socket.on("candidate_joined", (data: { quizId: number, candidateName?: string }) => {
         const { quizId, candidateName } = data;
 
@@ -188,6 +219,7 @@ export class SocketService {
         console.log(`Mentor ${socket.id} joined quiz ${quizId}`);
       });
 
+      // Mentor starts quiz - triggered from frontend
       socket.on("mentor_start_quiz", (data: {
         quizId: number;
         duration: number;
@@ -195,10 +227,18 @@ export class SocketService {
       }) => {
         const { quizId, duration, questions } = data;
 
-        console.log(`👨‍🏫 Mentor requested to start quiz ${quizId}`);
+        console.log(`👨‍🏫 Mentor requested to start quiz ${quizId} with ${questions?.length || 0} questions`);
+
+        if (!questions || questions.length === 0) {
+          console.error(`❌ No questions provided for quiz ${quizId}`);
+          socket.emit("error", { message: "No questions available for this quiz" });
+          return;
+        }
+
         this.startQuizForCandidates(quizId, duration, questions);
       });
-      //  Candidate navigates to different question
+
+      // Candidate navigates to different question
       socket.on("candidate_navigated", (data: { quizId: number, questionIndex: number }) => {
         const { quizId, questionIndex } = data;
 
@@ -213,6 +253,10 @@ export class SocketService {
           candidateData.currentQuestionIndex = questionIndex;
           candidateData.lastActivity = new Date();
 
+          // Get total questions from quiz timer/state
+const totalQuestions =
+  this.quizMeta.get(quizId)?.totalQuestions || 0;
+
           console.log(`📊 Candidate ${socket.id} moved to question ${questionIndex + 1} in quiz ${quizId}`);
 
           // Notify mentor candidate progress
@@ -221,13 +265,13 @@ export class SocketService {
             candidateName: candidateData.candidateName,
             quizId,
             currentQuestionIndex: questionIndex + 1,
-            totalQuestions: 10, //pass from quiz data
+            totalQuestions: totalQuestions,
             lastActivity: candidateData.lastActivity,
           });
         }
       });
 
-      //  Candidate answers a question
+      // Candidate answers a question
       socket.on("candidate_answered", (data: {
         quizId: number,
         questionId: number,
@@ -328,7 +372,7 @@ export class SocketService {
     this.candidateProgress.get(quizId)?.delete(socketId);
   }
 
-  // event broadcast
+  // Event broadcast
   broadcastToQuiz(quizId: number, event: string, payload: any) {
     this.io.to(`quiz_${quizId}`).emit(event, payload);
 

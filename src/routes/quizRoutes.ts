@@ -4,7 +4,7 @@ import { jwtCheck, jwtParse } from '../middleware/auth';
 
 const router = express.Router();
 //api/quiz
-router.post("/create",CreateMyQuiz);
+router.post("/create",jwtCheck,jwtParse,CreateMyQuiz);
 
 router.get("/getAll",GetAllQuizzes);
 
