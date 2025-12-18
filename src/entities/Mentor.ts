@@ -2,6 +2,7 @@ import {Entity,PrimaryGeneratedColumn,Column,OneToOne,JoinColumn, UpdateDateColu
 
 import { User } from './User'
 import { Quiz } from './Quiz';
+import { Course } from './Courses';
 
 @Entity("mentors")
 export class Mentors{
@@ -31,5 +32,8 @@ export class Mentors{
     @JoinColumn({ name: "user_id" }) 
     user!: User;
     
+    @OneToMany(() => Course, (course) => course.mentor)
+    courses!: Course[];
+
 
 }

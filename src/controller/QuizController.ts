@@ -43,7 +43,7 @@ export const CreateMyQuiz = async (req: Request, res: Response) => {
         }
 
         const quiz = quizRepository.create({
-            course_name: req.body.course_name,
+            quiz_name: req.body.course_name,
             status : req.body.status,
             quiz_description: req.body.quiz_description,
             start_datetime: req.body.start_datetime,

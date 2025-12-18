@@ -27,7 +27,7 @@ export class QuizSessionService {
 
             console.log(`Quiz found:`, {
                 id: quiz.quiz_id,
-                course: quiz.course_name,
+                course: quiz.quiz_name,
                 currentState: quiz.session_state,
                 mentor: quiz.mentor ? `Mentor ID: ${quiz.mentor.mentor_id}` : 'No mentor'
             });
@@ -144,7 +144,7 @@ export class QuizSessionService {
     async getQuizState(quizId: number): Promise<Quiz> {
         const quiz = await this.quizRepository.findOne({
             where: { quiz_id: quizId },
-            relations: ['mentor']
+            relations: ['mentor','questions']
         });
         if (!quiz) throw new Error("Quiz not found");
 

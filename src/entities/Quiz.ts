@@ -14,7 +14,7 @@ export class Quiz {
         length: 100,
         nullable: false,
     })
-    course_name!: string;
+    quiz_name!: string;
 
     @Column({
         type: 'nvarchar',
@@ -79,11 +79,11 @@ export class Quiz {
     }
 
     isScheduled() : boolean{
-        return this.session_state === 'scheduled'
+        return this.session_state === 'scheduled' 
     }
 
     canStart() : boolean{
-        return ['draft','scheduled'].includes(this.session_state);
+        return ['scheduled','draft','ended'].includes(this.session_state);
     }
 
     canPause(): boolean {

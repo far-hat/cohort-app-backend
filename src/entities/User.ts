@@ -2,6 +2,7 @@ import {Column, Entity, PrimaryGeneratedColumn,CreateDateColumn,UpdateDateColumn
 import { Mentors } from './Mentor';
 import { Candidate } from './Candidate';
 import { QuizAttempt } from './QuizAttempt';
+import { Enrollment } from './CohortEnrollment';
 
 // export enum UserRole {
 //       ADMIN = "admin",
@@ -40,6 +41,10 @@ import { QuizAttempt } from './QuizAttempt';
 
         @OneToOne( () => Candidate, (candidate)=> candidate.user )
         candidate! : Candidate ;
+
+        @OneToMany( ()=> Enrollment, (enrollment) => enrollment.user)
+        enrollments! : Enrollment[];
+
 
         @CreateDateColumn()
         created_at!: Date;

@@ -161,6 +161,11 @@ export class SocketService {
           socket.join(`quiz_${quizId}`);
         });
 
+        socket.on("mentor_start_quiz", (data) => {
+        const { quizId, duration, questions } = data;
+        this.startQuizForCandidates(quizId, duration, questions);
+        });
+
 
         if (!this.quizRooms.has(quizId)) {
           this.quizRooms.set(quizId, new Set());

@@ -8,6 +8,9 @@ import { Mentors } from "../entities/Mentor";
 import { Candidate } from "../entities/Candidate";
 import { QuizAnswer } from "../entities/QuizAnswer";
 import { QuizAttempt } from "../entities/QuizAttempt";
+import { Course } from "../entities/Courses";
+import { Cohort } from "../entities/Cohorts";
+import { Enrollment } from "../entities/CohortEnrollment";
 
 
 const AppDataSource = new DataSource({
@@ -18,7 +21,7 @@ const AppDataSource = new DataSource({
     database : process.env.DB_DATABASE!,
     synchronize: true, //  auto-create/alter tables
     logging: true,
-    entities: [Mentors,Quiz,Questions,Options,User,Candidate,QuizAnswer,QuizAttempt],
+    entities: [Mentors,Quiz,Questions,Options,User,Candidate,QuizAnswer,QuizAttempt,Course,Cohort,Enrollment],
     options : {
         encrypt : true,
         trustServerCertificate : true,

@@ -7,6 +7,9 @@ import userRoute from "./routes/userRoute"
 import quizRoutes from "./routes/quizRoutes"
 import questionRoutes from "./routes/questionRoutes"
 import quizSessionRoutes from "./routes/quizSessionRoutes"
+import courseRoutes from "./routes/courseRoutes"
+import cohortRoutes from "./routes/cohortRoutes"
+
 import http from "http" ;
 import { SocketService } from "./services/socketServices";
 
@@ -24,6 +27,8 @@ app.use("/api/user",userRoute);
 app.use("/api/quiz",quizRoutes);
 app.use("/api/quiz/:quizId/questions",questionRoutes);
 app.use("/api/quiz-session",quizSessionRoutes);
+app.use("/api/course",courseRoutes);
+app.use("/api/cohort",cohortRoutes);
 
 app.get('/test', async(req,res)=>{
     res.json({message : "Hello"})
