@@ -76,3 +76,38 @@ export const ViewCourses = async(req :Request, res : Response) => {
         return res.sendStatus(500)
     }
 }
+
+export const ViewCourseById = async(req :Request, res : Response) => {
+    try {
+        const auth0Id = req.auth0Id;
+        const courseId = Number(req.params.id);
+
+        if(!courseId) return res.status(404).json("Course Id not found");
+
+        const user = await AppDataSource.getRepository(User).findOne({
+            where : {auth0Id},
+            relations : ["mentor"]
+        });
+
+        if(!user){
+            return res.sendStatus(401);
+        }
+
+        if(user.role !== "mentor"){
+            return res.sendStatus(403);
+        }
+
+        if(!user.mentor){
+            return res.sendStatus(404);
+        }
+
+        const course = await courseRepository.findOne({
+            where: {course_id : courseId},
+        })
+        if(!course) return res.sendStatus(404);
+
+        return res.status(200).json(course);
+    } catch (er) {
+        return res.sendStatus(500)
+    }
+}
