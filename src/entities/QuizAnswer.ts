@@ -16,7 +16,7 @@ export class QuizAnswer {
     question!: Questions;
 
     @ManyToOne(() => Options, { nullable: true })
-    selected_option!: Options;
+    selected_option!: Options | null;
 
     @Column({ default:false })
     is_correct!: boolean;

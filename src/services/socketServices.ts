@@ -126,8 +126,8 @@ export class SocketService {
   constructor(server: any) {
     this.io = new Server(server, {
       cors: {
-        origin: "http://localhost:5173",
-        methods: ["GET", "POST"],
+        origin: ["http://localhost:5173", "http://localhost:3000"],
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         credentials: true,
       },
       connectionStateRecovery: {
@@ -157,15 +157,6 @@ export class SocketService {
         }
 
         socket.join(`quiz_${quizId}`);
-        socket.on("join_quiz", (quizId) => {
-          socket.join(`quiz_${quizId}`);
-        });
-
-        socket.on("mentor_start_quiz", (data) => {
-        const { quizId, duration, questions } = data;
-        this.startQuizForCandidates(quizId, duration, questions);
-        });
-
 
         if (!this.quizRooms.has(quizId)) {
           this.quizRooms.set(quizId, new Set());
@@ -176,45 +167,82 @@ export class SocketService {
         console.log(`Client ${socket.id} joined quiz ${quizId}`);
       });
 
+      // Mentor start quiz handler
+      socket.on("mentor_start_quiz", (data: { quizId: number; duration: number; questions: any[] }) => {
+        const { quizId, duration, questions } = data;
+        
+        try {
+          console.log(`👨‍🏫 Mentor requested to start quiz ${quizId} with ${questions?.length || 0} questions`);
+
+          // Validation
+          if (!quizId || typeof quizId !== 'number') {
+            socket.emit("error", { message: "Invalid quiz ID provided" });
+            return;
+          }
+
+          if (!duration || typeof duration !== 'number' || duration <= 0) {
+            socket.emit("error", { message: "Invalid quiz duration provided" });
+            return;
+          }
+
+          if (!questions || !Array.isArray(questions) || questions.length === 0) {
+            console.error(`❌ No questions provided for quiz ${quizId}`);
+            socket.emit("error", { message: "No questions available for this quiz" });
+            return;
+          }
+
+          this.startQuizForCandidates(quizId, duration, questions);
+        } catch (error) {
+          console.error("Error in mentor_start_quiz:", error);
+          socket.emit("error", { message: "Failed to start quiz session" });
+        }
+      });
+
       // Candidate joins as a participant
       socket.on("candidate_joined", (data: { quizId: number, candidateName?: string }) => {
         const { quizId, candidateName } = data;
 
-        if (!quizId) {
-          console.log("No Quiz Id provided for candidate_joined");
+        if (!quizId || typeof quizId !== 'number') {
+          console.log("Invalid quizId provided for candidate_joined");
+          socket.emit("error", { message: "Invalid quiz ID provided" });
           return;
         }
 
-        // Join necessary rooms
-        socket.join(`quiz_${quizId}`);
-        socket.join(`candidates_${quizId}`);
+        try {
+          // Join necessary rooms
+          socket.join(`quiz_${quizId}`);
+          socket.join(`candidates_${quizId}`);
 
-        // Leave mentor room if they were in it
-        socket.leave(`mentor_${quizId}`);
+          // Leave mentor room if they were in it
+          socket.leave(`mentor_${quizId}`);
 
-        // Initialize candidate progress tracking
-        if (!this.candidateProgress.has(quizId)) {
-          this.candidateProgress.set(quizId, new Map());
+          // Initialize candidate progress tracking
+          if (!this.candidateProgress.has(quizId)) {
+            this.candidateProgress.set(quizId, new Map());
+          }
+
+          this.candidateProgress.get(quizId)!.set(socket.id, {
+            socketId: socket.id,
+            candidateName: candidateName?.trim() || `Candidate_${socket.id.slice(0, 6)}`,
+            currentQuestionIndex: 0,
+            answers: new Map(),
+            joinedAt: new Date(),
+            lastActivity: new Date(),
+          });
+
+          console.log(`✅ Candidate ${socket.id} (${candidateName || 'anonymous'}) joined Quiz ${quizId}`);
+
+          // Notify mentor
+          this.io.to(`mentor_${quizId}`).emit("candidate_joined", {
+            candidateId: socket.id,
+            candidateName: candidateName?.trim() || `Candidate_${socket.id.slice(0, 6)}`,
+            quizId,
+            joinedAt: new Date()
+          });
+        } catch (error) {
+          console.error("Error in candidate_joined:", error);
+          socket.emit("error", { message: "Failed to join quiz session" });
         }
-
-        this.candidateProgress.get(quizId)!.set(socket.id, {
-          socketId: socket.id,
-          candidateName: candidateName || `Candidate_${socket.id.slice(0, 6)}`,
-          currentQuestionIndex: 0,
-          answers: new Map(),
-          joinedAt: new Date(),
-          lastActivity: new Date(),
-        });
-
-        console.log(`Candidate ${socket.id} (${candidateName || 'anonymous'}) joined Quiz ${quizId}`);
-
-        // Notify mentor
-        this.io.to(`mentor_${quizId}`).emit("candidate_joined", {
-          candidateId: socket.id,
-          candidateName: candidateName || `Candidate_${socket.id.slice(0, 6)}`,
-          quizId,
-          joinedAt: new Date()
-        });
       });
 
       // Mentor joins mentor room
@@ -224,24 +252,7 @@ export class SocketService {
         console.log(`Mentor ${socket.id} joined quiz ${quizId}`);
       });
 
-      // Mentor starts quiz - triggered from frontend
-      socket.on("mentor_start_quiz", (data: {
-        quizId: number;
-        duration: number;
-        questions: any[];
-      }) => {
-        const { quizId, duration, questions } = data;
 
-        console.log(`👨‍🏫 Mentor requested to start quiz ${quizId} with ${questions?.length || 0} questions`);
-
-        if (!questions || questions.length === 0) {
-          console.error(`❌ No questions provided for quiz ${quizId}`);
-          socket.emit("error", { message: "No questions available for this quiz" });
-          return;
-        }
-
-        this.startQuizForCandidates(quizId, duration, questions);
-      });
 
       // Candidate navigates to different question
       socket.on("candidate_navigated", (data: { quizId: number, questionIndex: number }) => {
@@ -361,20 +372,34 @@ const totalQuestions =
     });
   }
 
-  private processCandidateSubmission(socketId: string, quizId: number) {
+  private async processCandidateSubmission(socketId: string, quizId: number) {
     // Get candidate's answers
     const candidateData = this.candidateProgress.get(quizId)?.get(socketId);
     if (!candidateData) return;
 
-    // 1. Save answers to database
-    // 2. Calculate score
-    // 3. Store attempt record
+    try {
+      console.log(`Processing submission for ${socketId} in quiz ${quizId}`);
+      console.log(`Answers:`, Object.fromEntries(candidateData.answers.entries()));
 
-    console.log(`Processing submission for ${socketId} in quiz ${quizId}`);
-    console.log(`Answers:`, Object.fromEntries(candidateData.answers.entries()));
+      // Import services here to avoid circular dependencies
+      const { QuizSessionService } = await import('./quizSessionService');
+      const quizSessionService = new QuizSessionService();
+      
+      // Save answers and calculate score
+      await quizSessionService.saveCandidateSubmission(
+        quizId,
+        socketId,
+        candidateData.candidateName,
+        Object.fromEntries(candidateData.answers.entries())
+      );
 
-    // Clean up after submission
-    this.candidateProgress.get(quizId)?.delete(socketId);
+      console.log(`✅ Submission processed for candidate ${socketId}`);
+    } catch (error) {
+      console.error(`❌ Error processing submission for ${socketId}:`, error);
+    } finally {
+      // Clean up after submission
+      this.candidateProgress.get(quizId)?.delete(socketId);
+    }
   }
 
   // Event broadcast

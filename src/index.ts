@@ -7,6 +7,7 @@ import userRoute from "./routes/userRoute"
 import quizRoutes from "./routes/quizRoutes"
 import questionRoutes from "./routes/questionRoutes"
 import quizSessionRoutes from "./routes/quizSessionRoutes"
+import quizResultsRoutes from "./routes/quizResultsRoutes"
 import courseRoutes from "./routes/courseRoutes"
 import cohortRoutes from "./routes/cohortRoutes"
 
@@ -18,8 +19,10 @@ import { errorHandler } from "./middleware/errorHandler";
 const app = express();
 
 app.use(cors({
-  origin: "http://localhost:5173",
-  credentials: true
+  origin: ["http://localhost:5173", "http://localhost:3000"],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
 
 //app.options("*", cors());
@@ -32,6 +35,7 @@ app.use("/api/user",userRoute);
 app.use("/api/quiz",quizRoutes);
 app.use("/api/quiz/:quizId/questions",questionRoutes);
 app.use("/api/quiz-session",quizSessionRoutes);
+app.use("/api/quiz-results",quizResultsRoutes);
 app.use("/api/course",courseRoutes);
 app.use("/api/course/:courseId",cohortRoutes);
 

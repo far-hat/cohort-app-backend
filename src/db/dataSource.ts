@@ -15,12 +15,12 @@ import { Enrollment } from "../entities/CohortEnrollment";
 
 const AppDataSource = new DataSource({
     type:"mssql",
-    host: process.env.DB_SERVER!,
-    username : process.env.DB_USER!,
-    password : process.env.DB_PASSWORD!,
-    database : process.env.DB_DATABASE!,
+    host: process.env.DB_SERVER || 'localhost',
+    username : process.env.DB_USER || 'sa',
+    password : process.env.DB_PASSWORD || 'Server@12345',
+    database : process.env.DB_DATABASE || 'CohortWebApp',
     synchronize: true, //  auto-create/alter tables
-    logging: true,
+    logging: false, // Disable logging in production
     entities: [Mentors,Quiz,Questions,Options,User,Candidate,QuizAnswer,QuizAttempt,Course,Cohort,Enrollment],
     options : {
         encrypt : true,
