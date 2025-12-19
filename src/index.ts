@@ -12,6 +12,7 @@ import cohortRoutes from "./routes/cohortRoutes"
 
 import http from "http" ;
 import { SocketService } from "./services/socketServices";
+import { errorHandler } from "./middleware/errorHandler";
 
 
 const app = express();
@@ -28,7 +29,9 @@ app.use("/api/quiz",quizRoutes);
 app.use("/api/quiz/:quizId/questions",questionRoutes);
 app.use("/api/quiz-session",quizSessionRoutes);
 app.use("/api/course",courseRoutes);
-app.use("/api/cohort",cohortRoutes);
+app.use("/api/course/:courseId",cohortRoutes);
+
+app.use(errorHandler);
 
 app.get('/test', async(req,res)=>{
     res.json({message : "Hello"})

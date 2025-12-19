@@ -1,13 +1,13 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import AppDataSource from "../db/dataSource";
 import { User } from "../entities/User";
 import { Cohort, CohortStatus } from "../entities/Cohorts";
 import { Course } from "../entities/Courses";
 
-export const createCohort = async(req: Request, res: Response) => {
+export const createCohort = async(req: Request, res: Response,next : NextFunction) => {
     try {
         const auth0Id = req.body.auth0Id;
-        const courseId = req.body.courseId;
+        const courseId = Number(req.params.courseId);
 
         const user = await AppDataSource.getRepository(User).findOne({
             where: {auth0Id},
@@ -29,7 +29,7 @@ export const createCohort = async(req: Request, res: Response) => {
         const courseRepository = await AppDataSource.getRepository(Course);
 
         const course = await courseRepository.findOne({
-            where: {course_id : Number(courseId)},
+            where: {course_id : courseId},
             relations : ["mentor"]
         });
 
@@ -57,7 +57,6 @@ export const createCohort = async(req: Request, res: Response) => {
         return res.status(201).json({message : "Cohort created successfully",cohort})
 
     } catch (error) {
-        console.log(error);
-        res.status(500).json({message: "Error creating cohort"})
+        next(error);
     }
 }

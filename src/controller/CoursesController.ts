@@ -7,8 +7,8 @@ const courseRepository = AppDataSource.getRepository(Course);
 
 export const CreateCourse = async(req : Request, res : Response) => {
     try {
-        //const auth0Id = req.auth0Id;
-        const auth0Id = req.body.auth0Id;
+        const auth0Id = req.auth0Id;
+        //const auth0Id = req.body.auth0Id;
 
         const user = await AppDataSource.getRepository(User).findOne({
             where: {auth0Id},

@@ -1,10 +1,13 @@
 import express from 'express';
 import { CreateCourse } from '../controller/CoursesController';
+import { courseCreationValidator } from '../validators/courseValidator';
+import { errorHandler } from '../middleware/errorHandler';
+import { jwtCheck, jwtParse } from '../middleware/auth';
 
 const router = express.Router();
 
 //api/course
 
-router.post("/create",CreateCourse);
+router.post("/create",jwtCheck,jwtParse,courseCreationValidator,CreateCourse,errorHandler);
 
 export default router;

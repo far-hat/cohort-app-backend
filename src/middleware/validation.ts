@@ -1,16 +1,37 @@
-import { NextFunction,Response,Request } from "express";
-import { body, validationResult } from "express-validator";
+import { NextFunction, Request, Response } from "express";
+import {
+  validationResult,
+  FieldValidationError,
+} from "express-validator";
 
-const handleValidationErrors = async (req:Request,res:Response,next:NextFunction) =>{
-    const errors = validationResult(req);
-    if(!errors.isEmpty()){
-        return res.status(400).json({errors : errors.array()} )
-    }
-    next();
-}
+export const handleValidationErrors = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const errors = validationResult(req);
 
-export const validateUserRequest = [
-   body("role").isString().notEmpty().withMessage('Role is required').isIn(["mentor" , "candidate"]).withMessage("Invalid role provided"),
-   body("isActive").isBoolean().withMessage("Active status can only be true or false"),
-   handleValidationErrors
-]
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      errors: errors.array().map((err) => {
+        if (err.type === "field") {
+          const fieldError = err as FieldValidationError;
+
+          return {
+            field: fieldError.path, 
+            message: fieldError.msg,
+          };
+        }
+
+        
+        return {
+          field: "unknown",
+          message: err.msg,
+        };
+      }),
+    });
+  }
+
+  next();
+};
