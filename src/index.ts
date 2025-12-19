@@ -22,7 +22,11 @@ app.use(cors({
   credentials: true
 }));
 
+//app.options("*", cors());
+
+// body parser
 app.use(express.json());
+
 
 app.use("/api/user",userRoute);
 app.use("/api/quiz",quizRoutes);

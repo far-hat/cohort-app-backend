@@ -102,7 +102,7 @@ export const GetMyQuizzes = async (req: Request, res: Response) => {
             relations: ["mentor"],
         });
         if(!quizzes){
-            return res.status(201).json({message: "No quiz found"})
+            return res.status(404).json({message: "No quiz found"})
         }
 
         return res.status(200).json(quizzes);
