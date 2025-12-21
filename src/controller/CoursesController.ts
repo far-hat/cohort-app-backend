@@ -103,8 +103,10 @@ export const ViewCourseById = async(req :Request, res : Response) => {
 
         const course = await courseRepository.findOne({
             where: {course_id : courseId},
+            relations : ["cohorts"]
         })
         if(!course) return res.sendStatus(404);
+        console.log(course);
 
         return res.status(200).json(course);
     } catch (er) {
