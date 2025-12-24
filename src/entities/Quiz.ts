@@ -83,7 +83,7 @@ export class Quiz {
     }
 
     canStart() : boolean{
-        return ['scheduled','draft','ended'].includes(this.session_state);
+        return ['scheduled','draft','ended'].includes(this.session_state)  ;
     }
 
     canPause(): boolean {

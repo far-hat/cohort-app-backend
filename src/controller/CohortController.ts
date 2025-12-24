@@ -6,7 +6,7 @@ import { Course } from "../entities/Courses";
 
 export const createCohort = async(req: Request, res: Response,next : NextFunction) => {
     try {
-        const auth0Id = req.body.auth0Id;
+        const auth0Id = req.auth0Id;
         const courseId = Number(req.params.courseId);
 
         const user = await AppDataSource.getRepository(User).findOne({
