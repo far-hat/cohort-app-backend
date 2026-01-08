@@ -3,7 +3,12 @@ import { Server } from "socket.io";
 export class SocketService {
   private io: Server;
   private quizRooms = new Map<number, Set<string>>(); // quiz_id -> client_ids
-  private quizTimers = new Map<number, NodeJS.Timeout>();
+  private quizTimers = new Map<number,NodeJS.Timeout>();
+  private quizTimerMeta = new Map<number, {
+    endsAt : number;
+    remaining : number;
+    paused : boolean;
+  }>();
 
   private quizMeta = new Map<number, { totalQuestions: number }>();
 
@@ -37,7 +42,7 @@ export class SocketService {
         question_number: index + 1,
         total_questions: questions.length
       })),
-      startedAt: new Date()
+      startedAt: new Date(),
     });
 
     // Emit to mentor too
@@ -51,26 +56,66 @@ export class SocketService {
         question_number: index + 1,
         total_questions: questions.length
       })),
-      startedAt: new Date()
+      startedAt: new Date(),
     });
+    const endsAt = Date.now() + duration * 1000;
+
+    this.quizTimerMeta.set(quizId,{
+      endsAt,
+      remaining : duration,
+      paused : false
+    })
 
     // Start countdown timer
-    this.startQuizTimer(quizId, duration);
+    this.startQuizTimer(quizId);
 
     console.log(`🚀 Quiz ${quizId} started for candidates with ${questions.length} questions`);
   }
 
-  // Timer implementation
-  private startQuizTimer(quizId: number, duration: number) {
-    // Clear existing timer if any
-    if (this.quizTimers.has(quizId)) {
-      clearInterval(this.quizTimers.get(quizId)!);
-    }
+  pauseQuizForCandidates(quizId : number) {
+    const meta = this.quizTimerMeta.get(quizId)!;
+    if(!meta) return;
 
-    let remaining = duration;
+    meta.remaining = Math.max(0,Math.floor((meta.endsAt - Date.now()) /1000));
+    meta.paused = true;
+
+    clearInterval(this.quizTimers.get(quizId)!);
+    this.quizTimers.delete(quizId);
+
+    this.io.to(`candidate_${quizId}`).emit("quiz_paused", {quizId, remainingTime : meta.remaining});
+  }
+
+  resumeQuizForCandidates(quizId : number) {
+    const meta = this.quizTimerMeta.get(quizId)!;
+    if(!meta) return;
+
+    meta.endsAt = Date.now() + meta.remaining * 1000;
+    meta.paused = false;
+
+    this.startQuizTimer(quizId);
+
+    this.io.to(`candidate_${quizId}`).emit("quiz_resumed",{quizId,remainingTime : meta.remaining});
+  }
+
+  getRemainingTime(quizId: number) {
+  const meta = this.quizTimerMeta.get(quizId);
+  if (!meta) return 0;
+
+  if (meta.paused) return meta.remaining;
+  return Math.max(0, Math.floor((meta.endsAt - Date.now()) / 1000));
+}
+
+  // Timer implementation
+  private startQuizTimer(quizId: number) {
+    
+    if(this.quizTimers.has(quizId)) clearInterval(this.quizTimers.get(quizId)!);
 
     const timer = setInterval(() => {
-      remaining -= 1;
+      const meta = this.quizTimerMeta.get(quizId);
+      if(!meta || meta.paused) return;
+
+      const remaining = Math.max(0, Math.floor((meta.endsAt - Date.now()) / 1000));
+      meta.remaining = remaining;
 
       // Broadcast time update to candidates
       this.io.to(`candidates_${quizId}`).emit("time_update", {
@@ -87,18 +132,16 @@ export class SocketService {
       // Time's up!
       if (remaining <= 0) {
         clearInterval(timer);
-        this.quizTimers.delete(quizId);
         this.endQuizForCandidates(quizId);
       }
     }, 1000);
 
     this.quizTimers.set(quizId, timer);
-    console.log(`⏰ Timer started for quiz ${quizId}: ${duration} seconds`);
+    console.log(`⏰ Timer started for quiz ${quizId}: ${timer} seconds`);
   }
 
   // End quiz method
   private endQuizForCandidates(quizId: number) {
-    console.log(`⏰ Time's up for quiz ${quizId}`);
 
     // Notify all candidates
     this.io.to(`candidates_${quizId}`).emit("quiz_ended", {

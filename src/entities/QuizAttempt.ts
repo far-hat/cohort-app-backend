@@ -3,14 +3,15 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDat
 import { User } from './User';
 import { Quiz } from './Quiz';
 import { QuizAnswer } from './QuizAnswer';
+import { Candidate } from './Candidate';
 
 @Entity({ name: 'quiz_attempts' })
 export class QuizAttempt {
     @PrimaryGeneratedColumn()
     attempt_id!: number;
 
-    @ManyToOne(() => User, (user) => user.quiz_attempts)
-    user!: User;
+    @ManyToOne(() => Candidate, (candidate) => candidate.quiz_attempts)
+    candidate!: Candidate;
 
     @ManyToOne(() => Quiz, (quiz) => quiz.attempts)
     quiz!: Quiz;

@@ -29,7 +29,7 @@ export class QuizResultsService {
             // Get all attempts for this quiz
             const attempts = await this.attemptRepository.find({
                 where: { quiz: { quiz_id: quizId } },
-                relations: ['user']
+                relations: ['candidate']
             });
 
             // Calculate statistics
@@ -96,17 +96,19 @@ export class QuizResultsService {
                 throw new Error('Quiz not found');
             }
 
+            
+
             // Get all attempts with answers
             const attempts = await this.attemptRepository.find({
                 where: { quiz: { quiz_id: quizId } },
-                relations: ['user', 'answers', 'answers.question', 'answers.selected_option'],
+                relations: ['candidate', 'answers', 'answers.question', 'answers.selected_option'],
                 order: { submitted_at: 'DESC' }
             });
 
             // Format detailed results
             const detailedResults = attempts.map(attempt => ({
                 attempt_id: attempt.attempt_id,
-                candidate_name: attempt.user?.user_name || 'Anonymous',
+                candidate_name: attempt.candidate?.candidate_id || 'Anonymous',
                 score: attempt.score,
                 total_questions: attempt.total_questions,
                 percentage: attempt.percentage,

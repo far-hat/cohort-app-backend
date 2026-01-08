@@ -7,6 +7,7 @@ import { Options } from "../entities/Options";
 import { Questions } from "../entities/Questions";
 import { QuizAttempt } from "../entities/QuizAttempt";
 import { QuizAnswer } from "../entities/QuizAnswer";
+import { Candidate } from "../entities/Candidate";
 
 export type CreateQuizRequest = {
     course_name : string;
@@ -21,8 +22,6 @@ const mentorsRepository = AppDataSource.getRepository(Mentors);
 const userRepository = AppDataSource.getRepository(User);
 const optionsRepository = AppDataSource.getRepository(Options);
 const questionRepository = AppDataSource.getRepository(Questions);
-const quizAttemptRepository = AppDataSource.getRepository(QuizAttempt);
-const quizAnswerRepository = AppDataSource.getRepository(QuizAnswer);
 
 export const CreateMyQuiz = async (req: Request, res: Response) => {
     try {
@@ -265,9 +264,18 @@ export const submitQuiz = async (req:Request, res:Response) => {
             return res.status(404).json({nessage : "Quiz not found"});
         }
 
+        const candidateRepo = AppDataSource.getRepository(Candidate)
+        const candidate= await candidateRepo.findOne({
+            where : { user: { user_id: user.user_id } },
+    relations: ['user']
+        })
+
+        if(!candidate) return res.status(404).json("Candidate not found");
+
+
         await AppDataSource.transaction( async (transactionalEntityManager) => {
             const attempt = new QuizAttempt();
-            attempt.user = user;
+            attempt.candidate = candidate;
             attempt.quiz = quiz;
             attempt.total_questions = quiz.questions.length;
 

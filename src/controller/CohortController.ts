@@ -7,7 +7,7 @@ import { Course } from "../entities/Courses";
 export const createCohort = async(req: Request, res: Response,next : NextFunction) => {
     try {
         const auth0Id = req.auth0Id;
-        const courseId = Number(req.params.courseId);
+        const courseId = req.baseUrl.slice(-1);
 
         const user = await AppDataSource.getRepository(User).findOne({
             where: {auth0Id},
@@ -29,7 +29,7 @@ export const createCohort = async(req: Request, res: Response,next : NextFunctio
         const courseRepository = await AppDataSource.getRepository(Course);
 
         const course = await courseRepository.findOne({
-            where: {course_id : courseId},
+            where: {course_id : Number(courseId)},
             relations : ["mentor"]
         });
 
@@ -59,4 +59,97 @@ export const createCohort = async(req: Request, res: Response,next : NextFunctio
     } catch (error) {
         next(error);
     }
+}
+
+
+export const updateCohort = async(req:Request, res: Response, next: NextFunction) => {
+    
+    try {
+        const auth0Id = req.auth0Id;
+        const courseId = req.baseUrl.slice(-1);
+        const cohortId = req.params.id;
+        const updatedCohort = req.body;
+
+        const user = await AppDataSource.getRepository(User).findOne({
+            where : {auth0Id},
+            relations : ["mentor"]
+        });
+
+        if(!user){
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        if(user.role !== "mentor"){
+            return res.status(403).json({
+                message : "Forbidden, only mentors can manage cohort"
+            });
+        }
+
+        if(!user.mentor){
+            res.status(404).json({
+                message : "Mentor not found"
+            });
+        }
+
+        const cohort = await AppDataSource.getRepository(Cohort).findOne({
+            where : {cohort_id : Number(cohortId)},
+            relations : ["course"]
+        });
+
+        if(!cohort){
+            return res.status(404).json({message : "Cohort not found"});
+        }
+
+        if( cohort.course.course_id !== Number(courseId)){
+            return res.status(403).json({message : "Cohort does not belong to the course"});
+        }
+
+        await AppDataSource.getRepository(Cohort).createQueryBuilder()
+        .update()
+        .set(updatedCohort)
+        .where("cohort_id = :cohortId",{cohortId})
+        .execute();
+
+        return res.status(200).json({message : "Cohort updated"});
+
+ } catch (error) {
+        next(error);
+    }
+}
+
+export const viewCohortById = async(req : Request, res: Response, next : NextFunction) => {
+
+    try {
+        const auth0Id = req.auth0Id;
+        const courseId = req.baseUrl.slice(-1);
+        const cohortId = req.params.id;
+
+        const user = await AppDataSource.getRepository(User).findOne({
+            where : {auth0Id}
+        });
+
+        //if(!user) return res.status(404).json({message : "User not found"});
+
+        const course = await AppDataSource.getRepository(Course).findOne({
+            where : {course_id : Number(courseId)},
+        });
+
+        if(!course) return res.status(404).json({message : "Course not found"});
+
+        //find returns an array of results even if there is only one cohort, it will retrieve it in array format
+        const cohort = await AppDataSource.getRepository(Cohort).findOne({
+            where : {cohort_id : Number(cohortId)},
+            relations : ["course"]
+        });
+
+        if(!cohort) return res.status(404).json({message : "Cohort not found"});
+
+        return res.status(200).json(cohort);
+
+    } catch (error) {
+        next(error);
+    }
+
 }

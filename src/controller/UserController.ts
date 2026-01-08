@@ -107,6 +107,7 @@ const handleCandidateRegistration = async(user : User, data : any , res : Respon
             existingCandidate.full_name = full_name;
             existingCandidate.phone = phone;
             existingCandidate.education_level = education_level;
+            user =user;
             await candidatesRepository.save(existingCandidate);
             return res.status(200).json({user,candidate:existingCandidate});
 
@@ -116,6 +117,7 @@ const handleCandidateRegistration = async(user : User, data : any , res : Respon
                 full_name : full_name,
                 phone : phone,
                 education_level : education_level,
+                user : user,
                 
             });
             await candidatesRepository.save(newCandidate);

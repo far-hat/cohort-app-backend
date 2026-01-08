@@ -23,7 +23,7 @@ export class QuizSessionController {
 
             const quiz = await this.quizSessionService.startQuiz(id);
 
-             console.log(`✅ Quiz ${id} started successfully`);
+             console.log(`Quiz ${id} started successfully`);
 
             res.json({
                 success: true,

@@ -12,7 +12,7 @@ import courseRoutes from "./routes/courseRoutes"
 import cohortRoutes from "./routes/cohortRoutes"
 
 import http from "http" ;
-import { SocketService } from "./services/socketServices";
+import { SocketService } from "./services/socket";
 import { errorHandler } from "./middleware/errorHandler";
 
 

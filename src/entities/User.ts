@@ -33,8 +33,7 @@ import { Enrollment } from './CohortEnrollment';
         @Column({default:true})
         isActive?:boolean;
 
-        @OneToMany(() => QuizAttempt, (attempt) => attempt.user)
-        quiz_attempts!: QuizAttempt[];
+        
 
         @OneToOne( () => Mentors, (mentor)=> mentor.user )
         mentor! : Mentors ;

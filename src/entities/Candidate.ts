@@ -1,6 +1,7 @@
-import {Entity,PrimaryGeneratedColumn,Column,OneToOne,JoinColumn, UpdateDateColumn, CreateDateColumn} from 'typeorm'
+import {Entity,PrimaryGeneratedColumn,Column,OneToOne,JoinColumn, UpdateDateColumn, CreateDateColumn, OneToMany} from 'typeorm'
 
 import { User } from './User'
+import { QuizAttempt } from './QuizAttempt';
 
 @Entity("candidates")
 export class Candidate{
@@ -26,6 +27,7 @@ export class Candidate{
     
             @UpdateDateColumn()
             updated_at! : Date;
-    
+    @OneToMany(() => QuizAttempt, (attempt) => attempt.candidate)
+    quiz_attempts!: QuizAttempt[];
 
 }
