@@ -1,9 +1,8 @@
 import { Request,Response,NextFunction } from "express";
-import { auth } from "express-oauth2-jwt-bearer";
-import jwt from "jsonwebtoken";
-
+import jwt, { JwtHeader,SigningKeyCallback } from "jsonwebtoken";
 import { User } from "../entities/User";
 import AppDataSource from "../db/dataSource";
+import JwksRsa from "jwks-rsa";
 
 
 declare global {
@@ -16,54 +15,57 @@ declare global {
 }
 const userRepository = AppDataSource.getRepository(User);
 
-
-export const jwtCheck = auth({
-  audience: process.env.AUTHO_AUDIENCE !,
-  //non null assertion
-  issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL  ?? "", //nullish coalescing
-  tokenSigningAlg: 'RS256'
+const jwksClient = JwksRsa({
+  jwksUri : `${process.env.AUTH0_ISSUER_BASE_URL}.well-known/jwks.json`,
+  cache : true,
+  rateLimit : true,
+  jwksRequestsPerMinute : 5,
 });
 
-export const jwtParse = async (req:Request,res:Response,next:NextFunction)=>{
+function getKey(header : JwtHeader, callback : SigningKeyCallback){
+  jwksClient.getSigningKey(header.kid!, (err,key) => {
+    const signingKey = key?.getPublicKey();
+    callback(err, signingKey);
+  });
+}
 
-  // if (req.method === "OPTIONS") {
-  //   return next();
-  // }
-  
+export const jwtParse = async(req : Request, res : Response, next : NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
-
-    if(!authHeader || !authHeader.startsWith("Bearer ")){
-      return res.sendStatus(401);
-    }
+    if(!authHeader?.startsWith("Bearer ")) return res.status(401).json({message : "Missing Auth Header"});
 
     const token = authHeader.split(" ")[1];
-    if(!token) return;
-    const decoded = jwt.decode(token) as jwt.JwtPayload;
 
-    if(!decoded?.sub){
-      return res.sendStatus(401);
-    }
+    if(!token) return res.status(401).json({message :"Token not found"});
 
-    const user = await userRepository.findOneBy({
-      auth0Id : decoded.sub,
-    });
+    jwt.verify(
+      token,
+      getKey,
+      {
+        audience : process.env.AUTH0_AUDIENCE,
+        issuer : process.env.AUTH0_ISSUER_BASE_URL,
+        algorithms : ["RS256"],
+      },
 
-    if(!user){
-      return res.sendStatus(401);
-    }
+      async(err,decoded : any) => {
+        if(err || !decoded.sub) return res.status(401).json({message : "Invalid Token"});
 
-    req.auth0Id = decoded.sub;
-    req.userId = user.user_id.toString();
+        const user = await userRepository.findOne({where: {auth0Id : decoded.sub}});
 
-    return next();
-    
+        if(!user) return res.status(401).json({message : "User not registered"});
+
+        req.auth0Id = decoded.sub;
+        req.userId = user.user_id.toString();
+
+        next();
+
+      }
+    );
   } catch (error) {
-    return res.sendStatus(401);
+    return res.status(401).json({message : "Unauthorised"});
   }
-
-  //the split will give us an array with Bearer as the first item and the access token as second and we capture the second item.
-  
-
-
 }
+
+
+
+

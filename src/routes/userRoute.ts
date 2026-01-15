@@ -1,13 +1,13 @@
 import express from 'express'
 import { createCurrentUser, updateCurrentUser } from '../controller/UserController';
-import { jwtCheck, jwtParse } from '../middleware/auth';
+import {  jwtParse } from '../middleware/auth';
 const router =express.Router();
 
 // api/user
-router.post("/",jwtCheck,createCurrentUser);
+router.post("/",createCurrentUser);
 
 //api/user/update
-router.put("/update",jwtCheck,jwtParse,updateCurrentUser);
+router.put("/update",jwtParse,updateCurrentUser);
 
 export default router;
 

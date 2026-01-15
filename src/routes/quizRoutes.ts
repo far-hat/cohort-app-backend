@@ -1,14 +1,14 @@
 import express from 'express';
 import { CreateMyQuiz, deleteQuiz, editQuiz, GetAllQuizzes, GetMyQuizzes, submitQuiz, ViewQuiz } from '../controller/QuizController';
-import { jwtCheck, jwtParse } from '../middleware/auth';
+import {  jwtParse } from '../middleware/auth';
 
 const router = express.Router();
 //api/quiz
-router.post("/create",jwtCheck,jwtParse,CreateMyQuiz);
+router.post("/create",jwtParse,CreateMyQuiz);
 
 router.get("/getAll",GetAllQuizzes);
 
-router.get("/my_quizzes",jwtCheck,jwtParse,GetMyQuizzes);
+router.get("/my_quizzes",jwtParse,GetMyQuizzes);
 
 router.get("/view-quiz/:id",ViewQuiz);
 

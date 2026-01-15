@@ -4,10 +4,10 @@ import { Request,Response } from "express";
 export class QuizSessionController {
     constructor(private quizSessionService : QuizSessionService){}
 
+   
+
     async startQuiz(req : Request, res : Response) {
         try {
-            console.log(` START QUIZ API CALLED: quiz_id = ${req.params.quiz_id}`);
-            console.log(` Headers:`, req.headers);
 
             const {quiz_id} = req.params;
             
@@ -21,7 +21,7 @@ export class QuizSessionController {
                 });
             }
 
-            const quiz = await this.quizSessionService.startQuiz(id);
+            const quiz = await this.quizSessionService.startQuiz(id,req);
 
              console.log(`Quiz ${id} started successfully`);
 
@@ -44,9 +44,20 @@ export class QuizSessionController {
     async pauseQuiz(req: Request, res : Response) {
         try {
            const {quiz_id} = req.params;
+
+           const id = Number(quiz_id);
+
+           if (isNaN(id)) {
+                console.log(`Invalid quiz ID: ${quiz_id}`);
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid quiz ID format"
+                });
+            }
            
            const quiz = await this.quizSessionService.pauseQuiz(
-            Number(quiz_id));
+            id);
+
 
            res.json({
             success : true,
@@ -65,8 +76,17 @@ export class QuizSessionController {
         try {
             const {quiz_id} = req.params;
 
-            const quiz = await this.quizSessionService.resumeQuiz(
-                Number(quiz_id));
+            const id = Number(quiz_id);
+
+           if (isNaN(id)) {
+                console.log(`Invalid quiz ID: ${quiz_id}`);
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid quiz ID format"
+                });
+            }
+
+            const quiz = await this.quizSessionService.resumeQuiz(id);
 
             res.json({
                 success : true,
@@ -84,8 +104,16 @@ export class QuizSessionController {
     async stopQuiz(req : Request, res : Response){
         try {
             const {quiz_id} = req.params;
-            const quiz = await this.quizSessionService.stopQuiz(
-                Number(quiz_id));
+            const id = Number(quiz_id);
+
+           if (isNaN(id)) {
+                console.log(`Invalid quiz ID: ${quiz_id}`);
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid quiz ID format"
+                });
+            }
+            const quiz = await this.quizSessionService.stopQuiz(id);
 
             res.json({
                 success: true,
@@ -103,7 +131,16 @@ export class QuizSessionController {
      async getQuizState(req: Request, res: Response) {
         try {
             const { quiz_id } = req.params;
-            const quiz = await this.quizSessionService.getQuizState(Number(quiz_id));
+            const id = Number(quiz_id);
+
+           if (isNaN(id)) {
+                console.log(`Invalid quiz ID: ${quiz_id}`);
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid quiz ID format"
+                });
+            }
+            const quiz = await this.quizSessionService.getQuizState(id);
 
             res.json({
                 success: true,
@@ -115,5 +152,14 @@ export class QuizSessionController {
                 message: error.message
             });
         }
+    }
+
+    async joinQuiz(req : Request, res: Response) {
+        const auth0Id = req.auth0Id;
+        const quizId = Number(req.params.quiz_id);
+
+        const data = await this.quizSessionService.createAttempt(auth0Id,quizId);
+        res.json({success : true, data});
+
     }
 }

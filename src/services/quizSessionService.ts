@@ -5,24 +5,31 @@ import { QuizAnswer } from "../entities/QuizAnswer";
 import { Questions } from "../entities/Questions";
 import { Options } from "../entities/Options";
 import { socketService } from "../index";
+import { User } from "../entities/User";
+import { Mentors } from "../entities/Mentor";
+import { Candidate } from "../entities/Candidate";
+import { Request } from "express";
+
+const userRepository = AppDataSource.getRepository(User);
+const attemptRepo = AppDataSource.getRepository(QuizAttempt);
+
 
 export class QuizSessionService {
     private quizRepository = AppDataSource.getRepository(Quiz);
 
-    async startQuiz(quizId: number): Promise<Quiz> {
+    async startQuiz(quizId: number,req:Request): Promise<Quiz> {
         try {
-            console.log(`Checking if Data Source is initialized`);
+            const auth0Id = req.auth0Id
+            const user = await userRepository.findOne({
+                where: { auth0Id },
+                relations: ["mentor"]
+            });
+            if (!user || !user.mentor) throw new Error("Unauthorized");
 
-            if (!AppDataSource.isInitialized) {
-                console.log(`Database not initialized`);
-                throw new Error(`Database could not be connected`);
-            }
-
-            console.log(`🔍 Querying database for quiz ${quizId}...`);
 
             const quiz = await this.quizRepository.findOne({
                 where: { quiz_id: quizId },
-                relations: ["mentor","questions","questions.options"]
+                relations: ["mentor", "questions", "questions.options"]
             });
             if (!quiz) {
                 console.log("Quiz not found :", quizId);
@@ -45,7 +52,7 @@ export class QuizSessionService {
                 throw new Error(`Quiz cannot be started from ${quiz.session_state} state`);
             }
 
-            
+
 
             quiz.session_state = 'active';
             quiz.status = 'Active';
@@ -55,15 +62,15 @@ export class QuizSessionService {
 
             console.log("Quiz saved successfully");
 
-            const questionsPayload = quiz.questions.map( (q,i) => ({
-                question_id : q.question_id,
-                question_text : q.question_text,
-                options : q.options.map( o => ({
-                    option_id : o.option_id,
-                    option_text : o.option_text
+            const questionsPayload = quiz.questions.map((q, i) => ({
+                question_id: q.question_id,
+                question_text: q.question_text,
+                options: q.options.map(o => ({
+                    option_id: o.option_id,
+                    option_text: o.option_text
                 })),
-                question_number : i+1,
-                total_questions : quiz.questions.length
+                question_number: i + 1,
+                total_questions: quiz.questions.length
             }))
 
             socketService.startQuizForCandidates(
@@ -83,7 +90,7 @@ export class QuizSessionService {
     async pauseQuiz(quizId: number): Promise<Quiz> {
         const quiz = await this.quizRepository.findOne({
             where: { quiz_id: quizId },
-            relations: ['questions','questions.options']
+            relations: ['questions', 'questions.options']
         });
 
         if (!quiz) throw new Error('Quiz not found');
@@ -93,6 +100,7 @@ export class QuizSessionService {
         quiz.session_state = 'paused';
         const savedQuiz = await this.quizRepository.save(quiz);
 
+        socketService.pauseQuizForCandidates(quizId);
         socketService.broadcastToQuiz(quizId, 'quiz_paused', {
             quizId,
             state: 'paused',
@@ -105,7 +113,7 @@ export class QuizSessionService {
     async resumeQuiz(quizId: number): Promise<Quiz> {
         const quiz = await this.quizRepository.findOne({
             where: { quiz_id: quizId },
-            relations: ['mentor',"questions","questions.options"]
+            relations: ['mentor', "questions", "questions.options"]
         });
 
         if (!quiz) throw new Error("Quiz not found");
@@ -115,6 +123,7 @@ export class QuizSessionService {
         quiz.session_state = 'active';
         const savedQuiz = await this.quizRepository.save(quiz);
 
+        socketService.resumeQuizForCandidates(quizId);
         socketService.broadcastToQuiz(quizId, 'quiz_resumed', {
             state: 'active',
             quizId,
@@ -133,61 +142,94 @@ export class QuizSessionService {
 
         if (!quiz.canStop()) throw new Error("Quiz cannot be stopped");
 
+        quiz.status = 'draft';
         quiz.session_state = 'ended';
         quiz.end_datetime = new Date();
         const savedQuiz = await this.quizRepository.save(quiz);
 
-        socketService.broadcastToQuiz(quizId, 'quiz_ended', {
-            state: 'ended',
-            quizId,
-            endedAt: quiz.end_datetime
-        });
+        socketService.endQuizForCandidates(quizId);
+        // socketService.broadcastToQuiz(quizId, 'quiz_ended', {
+        //     state: 'ended',
+        //     quizId,
+        //     endedAt: quiz.end_datetime
+        // });
         return savedQuiz;
     }
 
     async getQuizState(quizId: number) {
         const quiz = await this.quizRepository.findOne({
             where: { quiz_id: quizId },
-            relations: ['mentor','questions','questions.options']
+            relations: ['mentor', 'questions', 'questions.options']
         });
         if (!quiz) throw new Error("Quiz not found");
 
         return {
-            
-                session_state: quiz.session_state,
-                quiz_id: quiz.quiz_id,
-                start_datetime: quiz.start_datetime,
-                duration: quiz.duration,
-                remainingTime: quiz.session_state === 'active' ? this.calculateRemainingTime(quiz) : 0,
-                questions: quiz.questions?.map((q, index) => ({
-                    question_id: q.question_id,
-                    question_text: q.question_text,
-                    options: q.options?.map(opt => ({
-                        option_id: opt.option_id,
-                        option_text: opt.option_text
-                    })) || [],
-                    question_number: index + 1,
-                    total_questions: quiz.questions?.length || 0
-                })) || []
-            
+
+            session_state: quiz.session_state,
+            quiz_id: quiz.quiz_id,
+            start_datetime: quiz.start_datetime,
+            duration: quiz.duration,
+            remainingTime: quiz.session_state === 'active' ? this.calculateRemainingTime(quiz) : 0,
+            questions: quiz.questions?.map((q, index) => ({
+                question_id: q.question_id,
+                question_text: q.question_text,
+                options: q.options?.map(opt => ({
+                    option_id: opt.option_id,
+                    option_text: opt.option_text
+                })) || [],
+                question_number: index + 1,
+                total_questions: quiz.questions?.length || 0
+            })) || []
+
         };
+    }
+
+    async createAttempt(auth0Id: string, quizId: number) {
+
+        const user = await userRepository.findOne({
+            where: { auth0Id },
+            relations: ["candidate"]
+        });
+
+        if (!user || !user.candidate) throw new Error("Candidate not found!!!");
+
+        const quiz = await this.quizRepository.findOne({
+            where: { quiz_id: quizId },
+
+        });
+
+        if (!quiz) throw new Error("Quiz not found");
+
+        const attempt = attemptRepo.create({
+            candidate: user.candidate,
+            quiz,
+            total_questions: quiz.questions.length
+        });
+
+        const saved = await attemptRepo.save(attempt);
+
+        return {
+            attemptId: saved.attempt_id,
+            candidateName: saved.candidate.full_name,
+            quizId
+        }
     }
 
     private calculateRemainingTime(quiz: Quiz): number {
         if (!quiz.start_datetime || !quiz.duration) return 0;
-        
+
         const startTime = new Date(quiz.start_datetime).getTime();
-        const durationMs = quiz.duration * 60 *1000; // Convert minutes to milliseconds
+        const durationMs = quiz.duration * 60 * 1000; // Convert minutes to milliseconds
         const endTime = startTime + durationMs;
         const now = Date.now();
-        
+
         return Math.max(0, Math.floor((endTime - now) / 1000));
     }
 
-    async saveCandidateSubmission(quizId: number, candidateSocketId: string, candidateName: string, answers: Record<number, string>) {
+    async saveCandidateSubmission(quizId: number, attemptId: number, candidateName: string, answers: Record<number, string>) {
         try {
-            console.log(`💾 Saving submission for candidate ${candidateName} (${candidateSocketId}) in quiz ${quizId}`);
-            
+            console.log(`💾 Saving submission for candidate ${candidateName} (${attemptId}) in quiz ${quizId}`);
+
             // Get quiz with questions and correct answers
             const quiz = await this.quizRepository.findOne({
                 where: { quiz_id: quizId },
@@ -198,12 +240,12 @@ export class QuizSessionService {
                 throw new Error('Quiz not found');
             }
 
-            
+
             let candidateUser = await AppDataSource.getRepository('Candidate').findOne({
-                where: { }
+                where: {}
             });
 
-            
+
 
             // Create quiz attempt
             const QuizAttemptRepo = AppDataSource.getRepository(QuizAttempt);
@@ -228,7 +270,7 @@ export class QuizSessionService {
             for (const [questionId, answerText] of Object.entries(answers)) {
                 const qId = Number(questionId);
                 const question = quiz.questions?.find(q => q.question_id === qId);
-                
+
                 if (!question) {
                     console.warn(`Question ${qId} not found in quiz`);
                     continue;
@@ -256,7 +298,7 @@ export class QuizSessionService {
 
             // Calculate score
             const score = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
-            
+
             // Update attempt with score
             // savedAttempt.score = correctAnswers;
             // savedAttempt.percentage = score;
@@ -265,7 +307,7 @@ export class QuizSessionService {
             console.log(` Final score: ${correctAnswers}/${totalQuestions} (${score}%)`);
 
             return {
-              //  attemptId: savedAttempt.attempt_id,
+                //  attemptId: savedAttempt.attempt_id,
                 score: correctAnswers,
                 totalQuestions,
                 percentage: score,

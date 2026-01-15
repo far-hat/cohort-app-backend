@@ -1,5 +1,8 @@
 import { Server } from "socket.io";
 import { QuizSessionService } from "./quizSessionService";
+import { User } from "../entities/User";
+import AppDataSource from "../db/dataSource";
+import { QuizAttempt } from "../entities/QuizAttempt";
 
 export class SocketService {
     private io: Server;
@@ -8,9 +11,11 @@ export class SocketService {
     private quizMeta = new Map<number, { totalQuestions: number }>();
     private quizRemainingTime = new Map<number, number>();
     private quizStatus = new Map<number, "active" | "paused" | "ended">();
-    private quizCurrentQuestion = new Map<number,number>();
+    private quizCurrentQuestion = new Map<number, number>();
 
-    private candidateProgress = new Map<number, Map<string, {
+    private candidateProgress = new Map<number, Map<number, {
+        userId : number;
+        attemptId : number;
         socketId: string;
         candidateName: string;
         currentQuestionIndex: number;
@@ -40,7 +45,7 @@ export class SocketService {
         this.io.to(`mentor_${quizId}`).emit(event, payload);
     }
 
-    private socketHandlers() {
+     private  socketHandlers() {
         this.io.on("connection", (socket) => {
             console.log(`Client connected: ${socket.id}`);
             console.log(`Total clients: ${this.io.engine.clientsCount}`);
@@ -52,29 +57,42 @@ export class SocketService {
             });
 
             // Candidate joins quiz room
-            socket.on("join_quiz", ({ quizId, candidateName }: { quizId: number, candidateName?: string }) => {
+             socket.on("join_quiz", async ({ 
+                quizId,
+                attemptId,          
+            }: { quizId: number, attemptId : number}) => {
                 if (!quizId) {
                     console.log("Quiz Id not found");
                     return;
                 }
 
-                socket.join(`candidate_${quizId}`);
-                socket.join(`quiz_${quizId}`); // optional for room broadcasts
+                const attemptRepo = AppDataSource.getRepository(QuizAttempt);
 
+                const attempt = await  attemptRepo.findOne({where : {attempt_id:attemptId},
+                relations : ["candidate","candidate.user"]});
+
+                if(!attempt) throw new Error("Attempt not found");
+
+                const candidateName = attempt.candidate.full_name;
+                const userId = attempt.candidate.user.user_id ;
+                
+                
                 if (!this.candidateProgress.has(quizId)) {
                     this.candidateProgress.set(quizId, new Map());
                 }
 
-                
-                this.candidateProgress.get(quizId)!.set(socket.id, {
-                    socketId: socket.id,
-                    candidateName: candidateName || `Candidate_${socket.id.slice(0, 6)}`,
-                    currentQuestionIndex: 0,
+                this.candidateProgress.get(quizId)!.set(attemptId, {
+                    userId,
+                    attemptId,
+                    socketId : socket.id,
+                    candidateName,
+                    currentQuestionIndex : 0,
                     answers: new Map(),
-                    joinedAt: new Date(),
-                    lastActivity: new Date(),
+                    joinedAt : new Date(),
+                    lastActivity : new Date(),
                 });
 
+                socket.join(`candidate_${quizId}`);
                 // Acknowledge back to candidate with remaining time and leaderboard
                 socket.emit("join_quiz_ack", {
                     remainingTime: this.getRemainingTime(quizId),
@@ -85,40 +103,40 @@ export class SocketService {
                 // Notify mentor
                 this.io.to(`mentor_${quizId}`).emit("candidate_joined", {
                     candidateId: socket.id,
-                    candidateName: candidateName || `Candidate_${socket.id.slice(0, 6)}`,
+                    candidateName: candidateName || `Candidate_${attemptId}`,
                     joinedAt: new Date(),
                     quizId,
                 });
 
-                console.log(`Candidate ${socket.id} joined quiz ${quizId}`);
+                console.log(`Candidate ${attemptId} joined quiz ${quizId}`);
             });
 
             // Candidate navigates a question
-            socket.on("candidate_navigated", ({ quizId, questionNo }: { quizId: number, questionNo: number }) => {
-                const candidate = this.candidateProgress.get(quizId)?.get(socket.id);
+            socket.on("candidate_navigated", ({ quizId,attemptId, questionNo }: { quizId: number,attemptId : number, questionNo: number }) => {
+                const candidate = this.candidateProgress.get(quizId)?.get(attemptId);
                 if (!candidate) {
                     console.log("No candidate");
                     return;
                 }
 
                 candidate.currentQuestionIndex = questionNo;
-                this.quizCurrentQuestion.set(quizId,questionNo)
+                this.quizCurrentQuestion.set(quizId, questionNo)
                 candidate.lastActivity = new Date();
 
                 // Notify mentor of candidate progress
                 this.io.to(`mentor_${quizId}`).emit("candidate_progress", {
-                    candidateId: socket.id,
+                    candidateId: attemptId,
                     candidateName: candidate.candidateName,
                     currentQuestionIndex: questionNo,
                     lastActivity: candidate.lastActivity,
                 });
 
-                console.log(`Candidate ${socket.id} navigated to question ${questionNo + 1}`);
+                console.log(`Candidate ${attemptId} navigated to question ${questionNo + 1}`);
             });
 
             // Candidate saves answer
-            socket.on("answer_saved", ({ quizId, questionId, answer }: { quizId: number, questionId: number, answer: string }) => {
-                const candidate = this.candidateProgress.get(quizId)?.get(socket.id);
+            socket.on("answer_saved", ({ quizId,attemptId, questionId, answer }: { quizId: number,attemptId: number, questionId: number, answer: string }) => {
+                const candidate = this.candidateProgress.get(quizId)?.get(attemptId);
                 if (!candidate) return;
 
                 candidate.answers.set(questionId, answer);
@@ -126,30 +144,30 @@ export class SocketService {
 
                 // Notify mentor
                 this.io.to(`mentor_${quizId}`).emit("candidate_answer_saved", {
-                    candidateId: socket.id,
+                    candidateId: attemptId,
                     candidateName: candidate.candidateName,
                     questionId,
                     answeredAt: candidate.lastActivity,
                 });
 
-                console.log(`Candidate ${socket.id} answered question ${questionId}`);
+                console.log(`Candidate ${attemptId} answered question ${questionId}`);
             });
 
             // Candidate submits quiz
-            socket.on("candidate_submitted", ({ quizId }: { quizId: number }) => {
-                this.processCandidateSubmission(socket.id, quizId);
+            socket.on("candidate_submitted", ({ quizId, attemptId }: { quizId: number, attemptId : number }) => {
+                this.processCandidateSubmission(attemptId, quizId);
 
                 // Confirm submission to candidate
                 socket.emit("submission_confirmed", { quizId });
 
                 // Notify mentor
                 this.io.to(`mentor_${quizId}`).emit("candidate_submitted", {
-                    candidateId: socket.id,
+                    candidateId: attemptId,
                     quizId,
                     submittedAt: new Date(),
                 });
 
-                console.log(`Candidate ${socket.id} submitted quiz ${quizId}`);
+                console.log(`Candidate ${attemptId} submitted quiz ${quizId}`);
             });
 
             // Mentor starts the quiz
@@ -176,152 +194,133 @@ export class SocketService {
 
             // Disconnect and cleanup
             socket.on("disconnect", () => {
-                console.log(`Client disconnected: ${socket.id}`);
-                this.quizRooms.forEach((_, quizId) => this.cleanupSocketFromQuiz(socket.id, quizId));
+                for(const[quizId,quizMap] of this.candidateProgress){
+                    for(const c of quizMap.values()){
+                        if(c.socketId === socket.id){
+                            c.socketId = ""
+                        }
+                    }
+                }
             });
         });
     }
 
-    cleanupSocketFromQuiz(socketId: string, quizId: number) {
-        this.candidateProgress.get(quizId)?.delete(socketId);
-        const socket = this.io.sockets.sockets.get(socketId);
-        if (socket) {
-            socket.leave(`quiz_${quizId}`);
-            socket.leave(`mentor_${quizId}`);
-            socket.leave(`candidate_${quizId}`);
-        }
+    // cleanupSocketFromQuiz(socketId: string, quizId: number) {
+    //     this.candidateProgress.get(quizId)?.delete(attemptId);
+    //     const socket = this.io.sockets.sockets.get(attemptId);
+    //     if (socket) {
+    //         socket.leave(`quiz_${quizId}`);
+    //         socket.leave(`mentor_${quizId}`);
+    //         socket.leave(`candidate_${quizId}`);
+    //     }
 
-        console.log(`Client ${socketId} left quiz ${quizId}`);
-    }
+    //     console.log(`Client ${attemptId} left quiz ${quizId}`);
+    // }
 
     startQuizForCandidates(quizId: number, questions: any[], duration: number) {
         if (!questions?.length) questions = [];
 
         this.quizMeta.set(quizId, { totalQuestions: questions.length });
-        this.quizCurrentQuestion.set(quizId,0);
+        this.quizCurrentQuestion.set(quizId, 0);
 
-        this.io.to(`candidate_${quizId}`).emit("quiz_started", {
+
+        const payload = {
             state: "active",
             quizId,
             duration,
-            questions,
-            startedAt: new Date()
-        });
-
-
-        const payloadMentor = {
-            state: "active",
-            quizId,
-            duration,
-            questions: questions.map((q, i) => ({
-                question_id: q.question_id,
-                question_text: q.question_text,
-                question_number: i + 1,
-                total_questions: questions.length
-            })),
+            questions: questions,
+            //  questions.map((q, i) => ({
+            //     question_id: q.question_id,
+            //     question_text: q.question_text,
+            //     question_number: i + 1,
+            //     total_questions: questions.length,
+            // })),
             startedAt: new Date(),
         };
 
-        this.io.to(`mentor_${quizId}`).emit("quiz_started", payloadMentor);
+        this.broadcastToQuiz(quizId,"quiz_started",payload);
+
+        // this.io.to(`mentor_${quizId}`).emit("quiz_started", payloadMentor);
         this.quizRemainingTime.set(quizId, duration);
         this.quizStatus.set(quizId, "active");
-        this.startQuizTimer(quizId, duration);
+        this.startQuizTimer(quizId);
 
         console.log(`Quiz ${quizId} started`);
     }
 
-    startQuizTimer(quizId: number, duration: number) {
-        if (this.quizTimers.has(quizId)) clearInterval(this.quizTimers.get(quizId)!);
+    startQuizTimer(quizId: number) {
+
+        const existing = this.quizTimers.get(quizId);
+        if (existing) {
+            clearInterval(existing);
+            this.quizTimers.delete(quizId);
+        }
 
         const timer = setInterval(() => {
-            if(this.quizStatus.get(quizId) !== "active" ) return;
-        let remaining = this.quizRemainingTime.get(quizId)! -1;
-            this.quizRemainingTime.set(quizId, remaining);
 
-            // this.io.to(`candidate_${quizId}`).emit("time_update", {
-
-            //     state: "active",
-            //     quizId,
-            //     remainingTime: remaining,
-            // });
-
-            this.broadcastToQuiz(quizId,"time_update",{ quizId, remainingTime: remaining });
-
-
-            if (remaining <= 0) {
-                // clearInterval(timer);
-                // this.quizTimers.delete(quizId);
-                this.endQuizForCandidates(quizId);
+            if (this.quizStatus.get(quizId) !== "active") {
+                clearInterval(timer);
+                this.quizTimers.delete(quizId);
+                return;
             }
+
+            const remaining = this.quizRemainingTime.get(quizId)!;
+            if (remaining === undefined) return;
+
+            const updated = remaining - 1;
+            if (updated <= 0) {
+                this.quizRemainingTime.set(quizId, 0);
+                this.endQuizForCandidates(quizId, "time_up");
+            }
+
+            this.quizRemainingTime.set(quizId, updated);
+
+
+            this.broadcastToQuiz(quizId, "time_update", {
+                quizId, remainingTime: updated,
+                currentQuestionIndex: this.quizCurrentQuestion.get(quizId)
+            });
+
         }, 1000);
 
         this.quizTimers.set(quizId, timer);
     }
 
     pauseQuizForCandidates(quizId: number) {
+
         const timer = this.quizTimers.get(quizId);
         if (timer) {
             clearInterval(timer);
+            console.log(timer);
             this.quizTimers.delete(quizId);
         }
-
-        const remaining = this.quizRemainingTime.get(quizId);
-
-        // Notify candidates and mentor that the quiz is paused
-        // this.io.to(`quiz_${quizId}`).emit("quiz_paused", { 
-        //     state : "paused",
-        //     quizId,
-        //     remainingTime : remaining
-        // });
+        this.quizStatus.set(quizId, "paused");
 
         this.broadcastToQuiz(quizId, "quiz_paused", {
             state: "paused",
             quizId,
             remainingTime: this.quizRemainingTime.get(quizId),
-            currentQuestionIndex : this.quizCurrentQuestion.get(quizId),
+            currentQuestionIndex: this.quizCurrentQuestion.get(quizId),
         });
-
-
-        this.quizStatus.set(quizId, "paused");
 
         console.log(`Quiz ${quizId} paused`);
     }
 
     resumeQuizForCandidates(quizId: number) {
-        if (this.quizTimers.has(quizId)) return;
+
         if (this.quizStatus.get(quizId) !== "paused") return;
 
         // If there was a previous timer, restart it
-        let remaining = this.quizRemainingTime.get(quizId) ?? 0;  // Get the time remaining when paused
+        const remaining = this.quizRemainingTime.get(quizId);  // Get the time remaining when paused
 
-        if (remaining <= 0) return;
+        if (remaining === undefined || remaining <= 0) return;
 
         this.quizStatus.set(quizId, "active");
 
-        const timer = setInterval(() => {
-            if (this.quizStatus.get(quizId) !== "active") return;
-
-            remaining--;
-            this.quizRemainingTime.set(quizId, remaining);
-            // this.io.to(`quiz_${quizId}`).emit("time_update",{
-            //     quizId,
-            //     remainingTime : remaining
-            // });
-            this.broadcastToQuiz(quizId, "time_update", {
-                quizId,
-                remainingTime: remaining,
-                currentQuestionIndex : this.quizCurrentQuestion.get(quizId),
-            });
-
-            if (remaining <= 0) {
-                this.endQuizForCandidates(quizId, "time_up")
-            }
-        }, 1000);
-
-        this.quizTimers.set(quizId, timer);
+        this.startQuizTimer(quizId);
 
         // Notify candidates and mentor that the quiz is resumed
-        this.io.to(`quiz_${quizId}`).emit("quiz_resumed", {
+        this.broadcastToQuiz(quizId, "quiz_resumed", {
             state: "active",
             quizId,
             remainingTime: remaining
@@ -339,16 +338,6 @@ export class SocketService {
             this.quizTimers.delete(quizId);
         }
 
-        this.quizRemainingTime.delete(quizId);
-        this.quizCurrentQuestion.delete(quizId);
-
-        // this.io.to(`quiz_${quizId}`).emit("quiz_ended", {
-        //     state: "ended",
-        //     quizId,
-        //     reason: reason,
-        //     endedAt: new Date().toISOString(),
-        // });
-
         this.broadcastToQuiz(quizId, "quiz_ended", {
             state: "ended",
             quizId,
@@ -358,27 +347,38 @@ export class SocketService {
 
 
         this.quizStatus.set(quizId, "ended");
+        this.quizTimers.delete(quizId);
+        this.quizRemainingTime.delete(quizId);
+        this.quizCurrentQuestion.delete(quizId);
+
+
 
         // Process remaining candidates
-        this.candidateProgress.get(quizId)?.forEach((_, socketId) => this.processCandidateSubmission(socketId, quizId));
+        this.candidateProgress.get(quizId)?.forEach((_, attemptId) => this.processCandidateSubmission(attemptId, quizId));
+
+        this.candidateProgress.delete(quizId);
+        this.io.in(`candidate_${quizId}`).socketsLeave(`candidate_${quizId}`);
+        this.io.in(`mentor_${quizId}`).socketsLeave(`mentor_${quizId}`);
+        this.io.in(`quiz_${quizId}`).socketsLeave(`quiz_${quizId}`);
+
 
         console.log(`Quiz ${quizId} ended`);
     }
 
 
-    async processCandidateSubmission(socketId: string, quizId: number) {
-        const candidate = this.candidateProgress.get(quizId)?.get(socketId);
+    async processCandidateSubmission(attemptId : number, quizId: number) {
+        const candidate = this.candidateProgress.get(quizId)?.get(attemptId);
 
         if (!candidate) return;
 
-        console.log(`Processing submission for ${socketId}:`, Object.fromEntries(candidate.answers.entries()));
+        console.log(`Processing submission for ${attemptId}:`, Object.fromEntries(candidate.answers.entries()));
 
         const quizSessionService = new QuizSessionService();
 
         try {
             await quizSessionService.saveCandidateSubmission(
                 quizId,
-                socketId,
+                attemptId,
                 candidate.candidateName,
                 Object.fromEntries(candidate.answers.entries())
             );
@@ -390,13 +390,13 @@ export class SocketService {
                 message: "There was an issue submitting your answers. Please try again later."
             });
         } finally {
-            this.candidateProgress.get(quizId)?.delete(socketId);
+            this.candidateProgress.get(quizId)?.delete(attemptId);
         }
     }
 
     getRemainingTime(quizId: number) {
-        
-        return  this.quizRemainingTime.get(quizId) ?? 0;
+
+        return this.quizRemainingTime.get(quizId);
     }
 
     getLeaderBoard(quizId: number) {

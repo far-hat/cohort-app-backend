@@ -9,7 +9,7 @@ export class Candidate{
     @PrimaryGeneratedColumn()
     candidate_id! : number;
 
-    @OneToOne( ()=> User)
+    @OneToOne( ()=> User, {nullable : false})
     @JoinColumn({name:"user_id"})
     user!:User;
 
