@@ -48,13 +48,22 @@ export class Quiz {
     start_datetime!: Date;
 
     @Column({ type: 'datetime', nullable: true })
-    end_datetime!: Date;
+    end_datetime?: Date | null;
+
+    @Column({ type: "datetime", nullable: true })
+    paused_at?: Date | null;
 
     @Column({
         type : 'int',
         nullable :true
     })
     duration! : number;
+
+    @Column({
+        type : 'int',
+        nullable :true
+    })
+    total_paused_ms? : number;
 
 
     @CreateDateColumn()

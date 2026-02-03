@@ -16,6 +16,6 @@ router.delete("/delete/:id",deleteQuiz);
 
 router.put("/edit/:id",editQuiz);
 
-router.post("/attempt/:id",submitQuiz);
+router.post("/attempt/:id",jwtParse,submitQuiz);
 
 export default router;

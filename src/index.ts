@@ -11,10 +11,9 @@ import quizResultsRoutes from "./routes/quizResultsRoutes"
 import courseRoutes from "./routes/courseRoutes"
 import cohortRoutes from "./routes/cohortRoutes"
 
-import http from "http" ;
-import { SocketService } from "./services/socket";
+import http from "http";
 import { errorHandler } from "./middleware/errorHandler";
-
+import { SocketService } from "./services/socketService";
 
 const app = express();
 
@@ -25,19 +24,18 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
 
-//app.options("*", cors());
 
-// body parser
+const server = http.createServer(app);
+const socketService = new SocketService(server);
 app.use(express.json());
 
-
-app.use("/api/user",userRoute);
-app.use("/api/quiz",quizRoutes);
-app.use("/api/quiz/:quizId/questions",questionRoutes);
-app.use("/api/quiz-session",quizSessionRoutes);
-app.use("/api/quiz-results",quizResultsRoutes);
-app.use("/api/course",courseRoutes);
-app.use("/api/course/:courseId",cohortRoutes);
+app.use("/api/user", userRoute);
+app.use("/api/quiz", quizRoutes);
+app.use("/api/quiz/:quizId/questions", questionRoutes);
+app.use("/api/quiz-session", quizSessionRoutes(socketService));
+app.use("/api/quiz-results", quizResultsRoutes);
+app.use("/api/course", courseRoutes);
+app.use("/api/course/:courseId", cohortRoutes);
 
 app.use(errorHandler);
 
@@ -45,9 +43,7 @@ app.get('/test', async(req,res)=>{
     res.json({message : "Hello"})
 })
 
-const server = http.createServer(app);
-//initialize socket service after server creation. 
-export const socketService = new SocketService(server);
+
 
 const PORT = process.env.PORT || 6500;
 
@@ -59,21 +55,3 @@ AppDataSource.initialize().then(()=>{
 }).catch((err:any)=>{
   console.error("Error during Data Source initialization",err)
 })
-
-/*
-// Wrap server start in an async function
-const startServer = async () => {
-  try {
-    await connectDB(); // ✅ Make sure DB is connected first
-
-    app.listen(PORT, () => {
-      console.log(`🚀 App started at http://localhost:${PORT}`);
-    });
-  } catch (error) {
-    console.error("❌ Failed to start server:", error);
-    process.exit(1); // Exit if DB connection fails
-  }
-};
-
-startServer();
-*/

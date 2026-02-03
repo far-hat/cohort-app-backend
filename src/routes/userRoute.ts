@@ -4,7 +4,7 @@ import {  jwtParse } from '../middleware/auth';
 const router =express.Router();
 
 // api/user
-router.post("/",createCurrentUser);
+router.post("/",jwtParse,createCurrentUser);
 
 //api/user/update
 router.put("/update",jwtParse,updateCurrentUser);

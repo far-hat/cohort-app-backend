@@ -113,7 +113,7 @@ export class QuizResultsService {
                 total_questions: attempt.total_questions,
                 percentage: attempt.percentage,
                 submitted_at: attempt.submitted_at,
-                time_taken: this.calculateTimeTaken(attempt.submitted_at, quiz.start_datetime),
+                //time_taken: this.calculateTimeTaken(attempt.submitted_at ?  Date.now() : , quiz.start_datetime),
                 answers: attempt.answers?.map(answer => ({
                     question_id: answer.question?.question_id,
                     question_text: answer.question?.question_text,
@@ -232,7 +232,7 @@ export class QuizResultsService {
 
         const startTime = new Date(quiz.start_datetime).getTime();
         const durations = attempts.map(attempt => {
-            const attemptTime = new Date(attempt.submitted_at).getTime();
+            const attemptTime = new Date(attempt.submitted_at?? Date.now()).getTime();
             return (attemptTime - startTime) / (1000 * 60); // Convert to minutes
         });
 

@@ -25,9 +25,13 @@ export class QuizAttempt {
     @Column({ type: 'float', nullable: true })
     percentage!: number;
 
-    @CreateDateColumn()
-    submitted_at!: Date;
+    @CreateDateColumn({nullable : true})
+    submitted_at?: Date;
+
+    @CreateDateColumn({nullable : true})
+    created_at ? : Date;
 
     @OneToMany(() => QuizAnswer, (answer) => answer.attempt, { cascade: true })
     answers!: QuizAnswer[];
+
 }

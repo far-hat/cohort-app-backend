@@ -1,150 +1,53 @@
-import { QuizSessionService } from "../services/quizSessionService";
-import { Request,Response } from "express";
+import { QuizSessionService } from "../services/quizSessionService2";
+import { Request, Response } from "express";
 
 export class QuizSessionController {
-    constructor(private quizSessionService : QuizSessionService){}
-
-   
-
-    async startQuiz(req : Request, res : Response) {
+    constructor(private quizSessionService: QuizSessionService) { }
+    async startQuiz(req: Request, res: Response) {
         try {
-
-            const {quiz_id} = req.params;
-            
-            const id = Number(quiz_id);
-
-            if (isNaN(id)) {
-                console.log(`Invalid quiz ID: ${quiz_id}`);
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid quiz ID format"
-                });
+            if (!req.quiz || !req.auth?.user) {
+                return res.status(500).json({ message: "Request context missing" });
             }
 
-            const quiz = await this.quizSessionService.startQuiz(id,req);
+            const quiz = req.quiz;
+            if (!quiz) {
+                throw new Error("Quiz missing from request context");
+            }
 
-             console.log(`Quiz ${id} started successfully`);
+            const updatedQuiz = await this.quizSessionService.startQuiz(quiz);
+            console.log(`Quiz ${quiz.quiz_id} started successfully`);
 
             res.json({
                 success: true,
                 message: "Quiz started succesfully",
-                data : quiz
+                data: updatedQuiz
             })
-        } catch (error:any) {
+        } catch (error: any) {
             console.error(` START QUIZ ERROR for quiz ${req.params.quiz_id}:`, error);
-            console.error(` Error stack:`, error.stack);
-            res.status(400).json({
-                success : false,
-                message : error.message
-            });
-        }
-    }
-
-
-    async pauseQuiz(req: Request, res : Response) {
-        try {
-           const {quiz_id} = req.params;
-
-           const id = Number(quiz_id);
-
-           if (isNaN(id)) {
-                console.log(`Invalid quiz ID: ${quiz_id}`);
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid quiz ID format"
-                });
-            }
-           
-           const quiz = await this.quizSessionService.pauseQuiz(
-            id);
-
-
-           res.json({
-            success : true,
-            message : "Quiz paused successfully",
-            data : quiz
-           });
-        } catch (error : any) {
-            res.status(400).json({
-                success : false,
-                message : error.message
-            });
-        }
-    }
-
-    async resumeQuiz(req : Request, res : Response){
-        try {
-            const {quiz_id} = req.params;
-
-            const id = Number(quiz_id);
-
-           if (isNaN(id)) {
-                console.log(`Invalid quiz ID: ${quiz_id}`);
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid quiz ID format"
-                });
-            }
-
-            const quiz = await this.quizSessionService.resumeQuiz(id);
-
-            res.json({
-                success : true,
-                message : "Quiz resumed successfully",
-                data : quiz
-            });
-        } catch (error :any) {
             res.status(400).json({
                 success: false,
-                message : error.message
+                message: error.message
             });
         }
     }
 
-    async stopQuiz(req : Request, res : Response){
-        try {
-            const {quiz_id} = req.params;
-            const id = Number(quiz_id);
 
-           if (isNaN(id)) {
-                console.log(`Invalid quiz ID: ${quiz_id}`);
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid quiz ID format"
-                });
+    async pauseQuiz(req: Request, res: Response) {
+        try {
+            if (!req.quiz || !req.auth?.user) {
+                return res.status(500).json({ message: "Request context missing" });
             }
-            const quiz = await this.quizSessionService.stopQuiz(id);
+
+            const quiz = req.quiz;
+            if (!quiz) {
+                throw new Error("Quiz missing from request context");
+            }
+            const updatedQuiz = await this.quizSessionService.pauseQuiz(quiz);
 
             res.json({
                 success: true,
-                message : "Quiz stopped successfully",
-                data : quiz
-            });
-        } catch (error : any) {
-            res.status(400).json({
-                success : false,
-                message : error.message
-            })
-        }
-    }
-
-     async getQuizState(req: Request, res: Response) {
-        try {
-            const { quiz_id } = req.params;
-            const id = Number(quiz_id);
-
-           if (isNaN(id)) {
-                console.log(`Invalid quiz ID: ${quiz_id}`);
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid quiz ID format"
-                });
-            }
-            const quiz = await this.quizSessionService.getQuizState(id);
-
-            res.json({
-                success: true,
-                data: quiz
+                message: "Quiz paused successfully",
+                data: updatedQuiz
             });
         } catch (error: any) {
             res.status(400).json({
@@ -154,12 +57,114 @@ export class QuizSessionController {
         }
     }
 
-    async joinQuiz(req : Request, res: Response) {
-        const auth0Id = req.auth0Id;
-        const quizId = Number(req.params.quiz_id);
+    async resumeQuiz(req: Request, res: Response) {
+        try {
 
-        const data = await this.quizSessionService.createAttempt(auth0Id,quizId);
-        res.json({success : true, data});
+            if (!req.quiz || !req.auth?.user) {
+                return res.status(500).json({ message: "Request context missing" });
+            }
 
+            const quiz = req.quiz;
+            if (!quiz) {
+                throw new Error("Quiz missing from request context");
+            } const updatedQuiz = await this.quizSessionService.resumeQuiz(quiz);
+
+            res.json({
+                success: true,
+                message: "Quiz resumed successfully",
+                data: updatedQuiz
+            });
+        } catch (error: any) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
+
+    async stopQuiz(req: Request, res: Response) {
+        try {
+            if (!req.quiz || !req.auth?.user) {
+                return res.status(500).json({ message: "Request context missing" });
+            }
+
+            const quiz = req.quiz;
+            if (!quiz) {
+                throw new Error("Quiz missing from request context");
+            } const { reason = "mentor_stopped" } = req.body?.reason || "mentor_stopped";
+            const updatedQuiz = await this.quizSessionService.stopQuiz(quiz, reason);
+
+            res.json({
+                success: true,
+                message: "Quiz stopped successfully",
+                data: updatedQuiz
+            });
+        } catch (error: any) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            })
+        }
+    }
+
+    async getQuizState(req: Request, res: Response) {
+        try {
+            if (!req.quiz || !req.auth?.user) {
+                return res.status(500).json({ message: "Request context missing" });
+            }
+
+            const quiz = req.quiz;
+            if (!quiz) {
+                throw new Error("Quiz missing from request context");
+            } const updatedQuiz = await this.quizSessionService.getQuizState(quiz);
+
+            res.json({
+                success: true,
+                data: updatedQuiz,
+            });
+        } catch (error: any) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
+
+    async joinQuiz(req: Request, res: Response) {
+        try {
+            const user = req.auth?.user!;
+            const quiz = req.quiz!;
+
+            const data = await this.quizSessionService.createAttempt(user, quiz);
+            res.json({ success: true, data });
+
+        } catch (error: any) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
+
+
+    async createAttempt(req: Request, res: Response) {
+        try {
+            const user = req.auth?.user!;
+            const quiz = req.quiz!;
+
+            const data = await this.quizSessionService.createAttempt(user, quiz);
+
+            res.json({
+                success: true,
+                message: "Attempt created successfully",
+                data
+            });
+
+        } catch (error: any) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
     }
 }

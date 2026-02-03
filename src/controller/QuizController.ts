@@ -10,11 +10,11 @@ import { QuizAnswer } from "../entities/QuizAnswer";
 import { Candidate } from "../entities/Candidate";
 
 export type CreateQuizRequest = {
-    course_name : string;
-    quiz_description : string;
+    course_name: string;
+    quiz_description: string;
     status: string;
-    start_datetime? : string;
-    end_datetime? : string;
+    start_datetime?: string;
+    end_datetime?: string;
 };
 
 const quizRepository = AppDataSource.getRepository(Quiz);
@@ -25,7 +25,10 @@ const questionRepository = AppDataSource.getRepository(Questions);
 
 export const CreateMyQuiz = async (req: Request, res: Response) => {
     try {
-        const auth0Id  = req.auth0Id;
+        const auth0Id = req.auth?.auth0Id;
+        if (!auth0Id) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
 
         const user = await userRepository.findOneBy({ auth0Id });
         if (!user) {
@@ -43,7 +46,7 @@ export const CreateMyQuiz = async (req: Request, res: Response) => {
 
         const quiz = quizRepository.create({
             quiz_name: req.body.course_name,
-            status : req.body.status,
+            status: req.body.status,
             quiz_description: req.body.quiz_description,
             start_datetime: req.body.start_datetime,
             end_datetime: req.body.end_datetime,
@@ -58,31 +61,34 @@ export const CreateMyQuiz = async (req: Request, res: Response) => {
     }
 }
 
-export const GetAllQuizzes = async (req:Request,res: Response) => {
+export const GetAllQuizzes = async (req: Request, res: Response) => {
     try {
         const quizzes = await quizRepository.find({ order: { quiz_id: 'ASC' } });
         if (!quizzes) {
-             res.status(404).json({ message: "No Quiz found" });
+            res.status(404).json({ message: "No Quiz found" });
         }
-         res.status(200).json(quizzes);
+        res.status(200).json(quizzes);
     } catch (error) {
         console.error(error);
-         res.status(500).send("Error fetching restaurant");
+        res.status(500).send("Error fetching restaurant");
     }
 }
 
 
 export const GetMyQuizzes = async (req: Request, res: Response) => {
     try {
-        const auth0Id = req.auth0Id;
+        const auth0Id = req.auth?.auth0Id;
+        if (!auth0Id) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
 
         const user = await userRepository.findOneBy({ auth0Id });
         if (!user) {
-             return res.status(404).json({ message: "User not found" });
+            return res.status(404).json({ message: "User not found" });
         }
 
         const mentor = await mentorsRepository.findOne({
-            where: { user: { user_id: user.user_id  } },
+            where: { user: { user_id: user.user_id } },
             relations: ["user"],
         });
         console.log(mentor);
@@ -95,13 +101,13 @@ export const GetMyQuizzes = async (req: Request, res: Response) => {
             where: {
                 mentor: {
                     mentor_id: mentor.mentor_id,
-                    
+
                 },
             },
             relations: ["mentor"],
         });
-        if(!quizzes){
-            return res.status(404).json({message: "No quiz found"})
+        if (!quizzes) {
+            return res.status(404).json({ message: "No quiz found" })
         }
 
         return res.status(200).json(quizzes);
@@ -117,15 +123,15 @@ export const ViewQuiz = async (req: Request, res: Response) => {
         if (!id) {
             return res.status(400).json({ message: "Quiz ID is required" });
         }
-        
+
         const quiz = await quizRepository.findOne({
-             where: {
+            where: {
                 quiz_id: Number(id)
             },
             relations: ['questions', 'questions.options']
         });
 
-        if(!quiz){
+        if (!quiz) {
             return res.status(404).json({ message: "Quiz not found" });
         }
 
@@ -137,7 +143,7 @@ export const ViewQuiz = async (req: Request, res: Response) => {
     }
 }
 
-export const deleteQuiz = async(req: Request, res : Response) => {
+export const deleteQuiz = async (req: Request, res: Response) => {
     try {
         const id = req.params.id;
         const quizId = Number(id);
@@ -158,7 +164,7 @@ export const deleteQuiz = async(req: Request, res : Response) => {
 
         // await quizRepository.delete(quizId);
 
-/////////////////////////////// ===============USING QUERY BUILDER ================ ////////////////
+        /////////////////////////////// ===============USING QUERY BUILDER ================ ////////////////
         // await optionsRepository
         //     .createQueryBuilder('option')
         //     .leftJoin('option.question','question')
@@ -177,59 +183,59 @@ export const deleteQuiz = async(req: Request, res : Response) => {
 
 
         const questions = await questionRepository.find({
-            where : {
-                quiz : {
-                    quiz_id : quizId
+            where: {
+                quiz: {
+                    quiz_id: quizId
                 }
             }
         });
 
-        const questionIds = questions.map( q => q.question_id);
-    
-        if(questionIds.length > 0){
+        const questionIds = questions.map(q => q.question_id);
+
+        if (questionIds.length > 0) {
             await optionsRepository
-            .createQueryBuilder()
-            .delete()
-            .where("question_id IN (:...questionIds)",{questionIds})
-            .execute();
+                .createQueryBuilder()
+                .delete()
+                .where("question_id IN (:...questionIds)", { questionIds })
+                .execute();
         }
 
         await questionRepository
             .createQueryBuilder()
             .delete()
-            .where("quiz_id = :quizId", {quizId})
+            .where("quiz_id = :quizId", { quizId })
             .execute();
-        
+
         await quizRepository.delete(quizId);
 
-        return res.json(200).json({message : "Quiz deleted succesfully"})
+        return res.json(200).json({ message: "Quiz deleted succesfully" })
     } catch (error) {
         console.error("Error deleting quiz:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
 }
 
-export const editQuiz = async(req : Request, res : Response) => {
+export const editQuiz = async (req: Request, res: Response) => {
     try {
         const id = req.params.id;
         const quizId = Number(id);
-        const quizData : CreateQuizRequest = req.body;
+        const quizData: CreateQuizRequest = req.body;
 
-        const quiz = await quizRepository.findOne({where : {quiz_id : quizId}});
+        const quiz = await quizRepository.findOne({ where: { quiz_id: quizId } });
 
-        if(!quiz) {
-            return res.status(404).json({message : "Quiz not found"});
+        if (!quiz) {
+            return res.status(404).json({ message: "Quiz not found" });
         }
 
         await quizRepository
             .createQueryBuilder()
             .update()
             .set(quizData)
-            .where("quiz_id = :quizId",{quizId})
+            .where("quiz_id = :quizId", { quizId })
             .execute();
-            
 
-        return res.status(200).json({message:"Quiz updated"});
+
+        return res.status(200).json({ message: "Quiz updated" });
 
     } catch (error) {
         console.error("Error updating quiz:", error);
@@ -237,43 +243,46 @@ export const editQuiz = async(req : Request, res : Response) => {
     }
 }
 export type QuizSubmissionRequest = {
-    responses : Record<string,string>;
+    responses: Record<string, string>;
 }
 
-export const submitQuiz = async (req:Request, res:Response) => {
+export const submitQuiz = async (req: Request, res: Response) => {
     try {
-        const {responses} : QuizSubmissionRequest = req.body;
-        const quizId  = req.params.id;
-        const auth0Id = req.auth0Id;
-
-        if(!quizId || !responses || Object.keys(responses).length === 0){
-            return res.status(400).json( { message : "Quiz ID and responses are required"});
+        const { responses }: QuizSubmissionRequest = req.body;
+        const quizId = req.params.id;
+        const auth0Id = req.auth?.auth0Id;
+        if (!auth0Id) {
+            return res.status(401).json({ message: "Unauthorized" });
         }
 
-        const user = await userRepository.findOneBy({auth0Id});
-        if(!user){
-            return res.status(404).json({message : "User not found"});
+        if (!quizId || !responses || Object.keys(responses).length === 0) {
+            return res.status(400).json({ message: "Quiz ID and responses are required" });
+        }
+
+        const user = await userRepository.findOneBy({ auth0Id });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
         }
 
         const quiz = await quizRepository.findOne({
-            where:{ quiz_id : Number(quizId)},
-            relations : ['questions','questions.options']
+            where: { quiz_id: Number(quizId) },
+            relations: ['questions', 'questions.options']
         })
 
-        if(!quiz){
-            return res.status(404).json({nessage : "Quiz not found"});
+        if (!quiz) {
+            return res.status(404).json({ nessage: "Quiz not found" });
         }
 
         const candidateRepo = AppDataSource.getRepository(Candidate)
-        const candidate= await candidateRepo.findOne({
-            where : { user: { user_id: user.user_id } },
-    relations: ['user']
+        const candidate = await candidateRepo.findOne({
+            where: { user: { user_id: user.user_id } },
+            relations: ['user']
         })
 
-        if(!candidate) return res.status(404).json("Candidate not found");
+        if (!candidate) return res.status(404).json("Candidate not found");
 
 
-        await AppDataSource.transaction( async (transactionalEntityManager) => {
+        await AppDataSource.transaction(async (transactionalEntityManager) => {
             const attempt = new QuizAttempt();
             attempt.candidate = candidate;
             attempt.quiz = quiz;
@@ -281,55 +290,56 @@ export const submitQuiz = async (req:Request, res:Response) => {
 
 
             let correctAnswers = 0;
-            const answers : QuizAnswer [] = [];
+            const answers: QuizAnswer[] = [];
 
-            for(const [questionId,selectedOptionText] of Object.entries(responses) ){
-                const question = await questionRepository.findOne({where: {question_id : Number(questionId)},
-                relations: ['options']
-            });
+            for (const [questionId, selectedOptionText] of Object.entries(responses)) {
+                const question = await questionRepository.findOne({
+                    where: { question_id: Number(questionId) },
+                    relations: ['options']
+                });
 
-            if(!question){
-                console.warn(`Question ${questionId} not found`);
-                continue;
-            }
+                if (!question) {
+                    console.warn(`Question ${questionId} not found`);
+                    continue;
+                }
 
-            const selectedOption = question.options.find(
-                option => option.option_text === selectedOptionText
-            );
+                const selectedOption = question.options.find(
+                    option => option.option_text === selectedOptionText
+                );
 
-            if(!selectedOption){
-              console.warn(`Option "${selectedOptionText}" not found for question ${questionId}`);
-                continue;  
-            }
-            const isCorrect = selectedOption.correct_option;
-            if(isCorrect){
-                correctAnswers++;
-            }
+                if (!selectedOption) {
+                    console.warn(`Option "${selectedOptionText}" not found for question ${questionId}`);
+                    continue;
+                }
+                const isCorrect = selectedOption.correct_option;
+                if (isCorrect) {
+                    correctAnswers++;
+                }
 
-            const answer = new QuizAnswer();
-            answer.question = question;
-            answer.selected_option = selectedOption;
-            answer.is_correct = isCorrect;
-            answer.attempt = attempt;
+                const answer = new QuizAnswer();
+                answer.question = question;
+                answer.selected_option = selectedOption;
+                answer.is_correct = isCorrect;
+                answer.attempt = attempt;
 
-            answers.push(answer);
+                answers.push(answer);
             }
 
             attempt.score = correctAnswers;
-            attempt.percentage = (correctAnswers/attempt.total_questions)*100;
+            attempt.percentage = (correctAnswers / attempt.total_questions) * 100;
 
-            await transactionalEntityManager.save(QuizAttempt,attempt);
-            await transactionalEntityManager.save(QuizAnswer,answers);
+            await transactionalEntityManager.save(QuizAttempt, attempt);
+            await transactionalEntityManager.save(QuizAnswer, answers);
 
 
             return res.status(201).json({
-                message : "Quiz submitted successfully"
+                message: "Quiz submitted successfully"
             });
-            
+
         })
     } catch (error) {
-         console.error("Quiz submission error:", error);
-        return res.status(500).json({ 
+        console.error("Quiz submission error:", error);
+        return res.status(500).json({
             message: "Error submitting quiz attempt",
             error: error instanceof Error ? error.message : "Unknown error"
         });
