@@ -12,9 +12,12 @@ import { Candidate } from "../entities/Candidate";
 export type CreateQuizRequest = {
     course_name: string;
     quiz_description: string;
-    status: string;
+    status?: string;
     start_datetime?: string;
     end_datetime?: string;
+    session_state? : string;
+
+
 };
 
 const quizRepository = AppDataSource.getRepository(Quiz);
@@ -227,13 +230,12 @@ export const editQuiz = async (req: Request, res: Response) => {
             return res.status(404).json({ message: "Quiz not found" });
         }
 
-        await quizRepository
-            .createQueryBuilder()
-            .update()
-            .set(quizData)
-            .where("quiz_id = :quizId", { quizId })
-            .execute();
-
+        // await quizRepository
+        //     .createQueryBuilder()
+        //     .update()
+        //     .set(quizData)
+        //     .where("quiz_id = :quizId", { quizId })
+        //     .execute();
 
         return res.status(200).json({ message: "Quiz updated" });
 

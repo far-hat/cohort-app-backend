@@ -4,6 +4,20 @@ import { Mentors } from "./Mentor";
 import { QuizAttempt } from "./QuizAttempt";
 
 
+export enum QuizStatus {
+    DRAFT = "draft",
+    PUBLISHED = "published",
+    ARCHIVED = "archived"
+}
+
+export enum QuizSessionState {
+    SCHEDULED = "scheduled",
+    ACTIVE = "active",
+    PAUSED = "paused",
+    ENDED = "ended"
+}
+
+
 @Entity({ name: "quiz" })
 export class Quiz {
     @PrimaryGeneratedColumn()
@@ -23,26 +37,18 @@ export class Quiz {
     })
     quiz_description!: string;
 
-    @Column({
-        type: 'nvarchar',
-        length: 50,
-        nullable: true,
-    })
-    status!: string;// can be draft, published or archived
+    @Column({ type: "varchar", length: 20, default: QuizStatus.DRAFT })
+    status!: QuizStatus;
 
-    //real-time session status field
-    @Column({
-        type : "varchar",
-        length: 20,
-        default : "scheduled"
-    })
-    session_state! : string; // can be scheduled,inactive , active, paused, ended.
- 
+    @Column({ type: "varchar", length: 20, default: QuizSessionState.SCHEDULED })
+    session_state!: QuizSessionState;
+
+
     @Column({
         type: 'datetime',
-        nullable : true
+        nullable: true
     })
-    scheduled_start! : Date;
+    scheduled_start!: Date;
 
     @Column({ type: 'datetime', nullable: true })
     start_datetime!: Date;
@@ -54,16 +60,16 @@ export class Quiz {
     paused_at?: Date | null;
 
     @Column({
-        type : 'int',
-        nullable :true
+        type: 'int',
+        nullable: true
     })
-    duration! : number;
+    duration!: number;
 
     @Column({
-        type : 'int',
-        nullable :true
+        type: 'int',
+        nullable: true
     })
-    total_paused_ms? : number;
+    total_paused_ms?: number;
 
 
     @CreateDateColumn()
@@ -72,27 +78,27 @@ export class Quiz {
     @UpdateDateColumn()
     updated_at!: Date;
 
-    
-    @OneToMany( ()=> Questions, (question)=> question.quiz , {cascade:true, onDelete : 'CASCADE'})
-    questions!:Questions[];
+
+    @OneToMany(() => Questions, (question) => question.quiz, { cascade: true, onDelete: 'CASCADE' })
+    questions!: Questions[];
 
     @ManyToOne(() => Mentors, (mentor) => mentor.quizzes)
-    @JoinColumn({ name: "mentor_id" }) 
-    mentor!: Mentors; 
+    @JoinColumn({ name: "mentor_id" })
+    mentor!: Mentors;
 
     @OneToMany(() => QuizAttempt, (attempt) => attempt.quiz)
     attempts!: QuizAttempt[];
 
-    isActive() : boolean{
+    isActive(): boolean {
         return this.session_state === 'active' || this.session_state === 'paused';
     }
 
-    isScheduled() : boolean{
-        return this.session_state === 'scheduled' 
+    isScheduled(): boolean {
+        return this.session_state === 'scheduled'
     }
 
-    canStart() : boolean{
-        return ['scheduled','draft','ended'].includes(this.session_state)  ;
+    canStart(): boolean {
+        return ['scheduled', 'ended'].includes(this.session_state);
     }
 
     canPause(): boolean {

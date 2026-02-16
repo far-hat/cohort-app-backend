@@ -91,7 +91,8 @@ export class QuizSessionController {
             const quiz = req.quiz;
             if (!quiz) {
                 throw new Error("Quiz missing from request context");
-            } const { reason = "mentor_stopped" } = req.body?.reason || "mentor_stopped";
+            } 
+            const reason  = req.body?.reason ?? "mentor_stopped";
             const updatedQuiz = await this.quizSessionService.stopQuiz(quiz, reason);
 
             res.json({
@@ -146,6 +147,27 @@ export class QuizSessionController {
         }
     }
 
+    async getMentorSnapshot(req: Request, res: Response) {
+  try {
+    if (!req.quiz || !req.auth?.user) {
+      return res.status(500).json({ message: "Request context missing" });
+    }
+
+    const snapshot = await this.quizSessionService.getMentorSnapshot(req.quiz);
+
+    res.json({
+      success: true,
+      data: snapshot
+    });
+
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message
+    });
+  }
+}
+
 
     async createAttempt(req: Request, res: Response) {
         try {
@@ -167,4 +189,26 @@ export class QuizSessionController {
             });
         }
     }
+
+    async getAttemptDetails(req: Request, res: Response) {
+  try {
+    const { attemptId } = req.params;
+    const data = await this.quizSessionService.getAttemptDetails(Number(attemptId));
+    res.json({ success: true, data });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+async submitQuiz(req: Request, res: Response) {
+  try {
+    const { attemptId } = req.params;
+    
+    const data = await this.quizSessionService.submitAttempt(Number(attemptId));
+    res.json({ success: true, data });
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
 }

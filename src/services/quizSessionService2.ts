@@ -1,311 +1,363 @@
-import AppDataSource from "../db/dataSource";
 import { Quiz } from "../entities/Quiz";
 import { QuizAttempt } from "../entities/QuizAttempt";
 import { User } from "../entities/User";
-import { redis } from "../redis/redisClient";
+import { AttemptService } from "./attemptService";
+import { QuizSessionRepository } from "../repository/quizSessionRepository";
+import { QuizTimeoutHandler } from "./quizTimeoutHandler";
+import { SessionTimingService } from "./sessionTimingService";
+import { SubmissionService } from "./submissionService";
+import { QuizSessionState } from "../entities/Quiz";
 import { SocketService } from "./socketService";
 
-export class QuizSessionService {
-    private quizTimers = new Map<number, NodeJS.Timeout>();
-    constructor(private socketService: SocketService) { }
+export class QuizSessionService implements QuizTimeoutHandler {
+  constructor(
+    private quizRepo: QuizSessionRepository,
+    private timingService: SessionTimingService,
+    private attemptService: AttemptService,
+    private submissionService: SubmissionService,
+    private socketService: SocketService,
+  ) { }
 
-    async startQuiz(quiz: Quiz) {
+  // -----------------------------
+  // QUIZ LIFECYCLE
+  // -----------------------------
 
-         //  Validate quiz can be started
-        if (!quiz.canStart()) {
-            throw new Error(`Quiz cannot be started from ${quiz.session_state} state`);
-        }
+  async onTick(quizId: number, remainingSeconds: number): Promise<void> {
+    this.socketService.emitToQuiz(quizId, "quiz:tick", {
+      quizId,
+      remainingSeconds,
+    });
+  }
 
-        const now = new Date();
-        const durationMs = quiz.duration * 60 *1000;
+  async recoverActiveSessions(): Promise<void> {
+    const activeQuizzes = await this.quizRepo.findAllActiveQuizzes();
 
-        // Update DB
-        quiz.status = "active";
-        quiz.session_state = 'active';
-        quiz.start_datetime = now;
-        quiz.end_datetime = new Date(now.getTime() + durationMs);
-        quiz.paused_at = null;
-        quiz.total_paused_ms = 0;
+    for (const quiz of activeQuizzes) {
+      if (!quiz.end_datetime) continue;
 
-        await AppDataSource.getRepository(Quiz).save(quiz);
+      const remainingMs =
+        quiz.end_datetime.getTime() - new Date().getTime();
 
-        this.startStopTimer(quiz, durationMs);
+      if (remainingMs <= 0) {
+        await this.autoStopQuiz(quiz.quiz_id);
+        continue;
+      }
 
-        // 5. Prepare questions for Redis
-        const questionsPayload = quiz.questions?.map((q, i) => ({
-            question_id: q.question_id,
-            question_text: q.question_text,
-            options: q.options?.map(o => ({
-                option_id: o.option_id,
-                option_text: o.option_text
-            })) || [],
-            question_number: i + 1,
-            total_questions: quiz.questions?.length || 0
-        })) || [];
+      await this.timingService.initializeTimer(
+        quiz.quiz_id,
+        remainingMs,
+        this
+      );
+    }
+  }
 
-        await this.socketService.emitToQuiz(quiz.quiz_id, "quiz_started", {
-            quizId : quiz.quiz_id,
-            state : "active",
-            questions : questionsPayload,
-            crrentQuestionIndex : 0,
-            duration : quiz.duration,
-            startedAt: quiz.start_datetime,
+
+  async onQuizTimeout(quizId: number): Promise<void> {
+    await this.autoStopQuiz(quizId);
+  }
+
+  async startQuiz(quiz: Quiz): Promise<Quiz> {
+    if (!quiz.canStart()) {
+      throw new Error("Quiz cannot be started in its current state");
+    }
+
+    const updatedQuiz = await this.quizRepo.markSessionStarted(quiz.quiz_id);
+
+    const remainingMs = updatedQuiz.end_datetime?.getTime()! - new Date().getTime();
+
+    console.log(`remaining ms is ${remainingMs}`);
+    await this.timingService.initializeTimer(updatedQuiz.quiz_id, remainingMs!, this);
+    const snapshot = await this.getMentorSnapshot(updatedQuiz);
+
+
+    this.socketService.emitToQuiz(updatedQuiz.quiz_id, "quiz:started", {
+      quizId: updatedQuiz.quiz_id,
+      state: updatedQuiz.session_state
+    });
+
+    
+
+    this.socketService.emitToQuiz(updatedQuiz.quiz_id, "quiz:snapshot_updated", snapshot);
+
+    return updatedQuiz;
+  }
+
+
+  async pauseQuiz(quiz: Quiz): Promise<Quiz> {
+    if (!quiz.canPause()) {
+      throw new Error("Quiz cannot be paused in its current state");
+    }
+
+    const updatedQuiz = await this.quizRepo.markSessionPaused(quiz.quiz_id);
+    await this.timingService.clearTimer(quiz.quiz_id);
+    const snapshot = await this.getMentorSnapshot(updatedQuiz);
+
+
+    this.socketService.emitToQuiz(updatedQuiz.quiz_id, "quiz:paused", {
+      quizId: updatedQuiz.quiz_id,
+      state: updatedQuiz.session_state
+    });
+    this.socketService.emitToQuiz(updatedQuiz.quiz_id, "quiz:snapshot_updated", snapshot);
+
+    return updatedQuiz;
+  }
+
+
+  async resumeQuiz(quiz: Quiz): Promise<Quiz> {
+    if (!quiz.canResume()) {
+      throw new Error("Quiz cannot be resumed in its current state");
+    }
+
+    const updatedQuiz = await this.quizRepo.markSessionResumed(quiz.quiz_id);
+    const remainingMs =
+      updatedQuiz.end_datetime!.getTime() - new Date().getTime();
+
+    await this.timingService.resumeTimer(quiz.quiz_id, remainingMs, this);
+    const snapshot = await this.getMentorSnapshot(updatedQuiz);
+
+    const activeAttempts =
+      await this.submissionService.getActiveAttemptsForQuiz(quiz.quiz_id);
+
+    for (const attempt of activeAttempts) {
+  const attemptQuestions = await this.getAttemptQuestions(attempt.attempt_id, quiz);
+  
+  this.socketService.emitToUser(attempt.candidate.user.user_id, "quiz:resumed", {
+    attemptId: attempt.attempt_id,
+    quizId: quiz.quiz_id,
+    questions: attemptQuestions.questions,
+    sessionState: attemptQuestions.sessionState,
+    totalQuestions: attemptQuestions.totalQuestions
+  });
+}
+
+
+   
+    this.socketService.emitToQuiz(updatedQuiz.quiz_id, "quiz:snapshot_updated", snapshot);
+
+    return updatedQuiz;
+  }
+
+
+  async stopQuiz(
+    quiz: Quiz,
+    reason: "mentor_stopped" | "system" | "force_end"
+  ): Promise<Quiz> {
+    if (!quiz.canStop()) {
+      throw new Error("Quiz cannot be stopped in its current state");
+    }
+
+    if (reason === "force_end") {
+
+      const updatedQuiz = await this.quizRepo.markSessionEnded(quiz.quiz_id);
+      await this.timingService.clearTimer(quiz.quiz_id);
+
+      const snapshot = await this.getMentorSnapshot(updatedQuiz);
+      this.socketService.emitToQuiz(updatedQuiz.quiz_id, "quiz:snapshot_updated", snapshot);
+
+      this.socketService.emitToQuiz(updatedQuiz.quiz_id, "quiz:stopped", {
+        quizId: updatedQuiz.quiz_id,
+        reason,
+        state: updatedQuiz.session_state
+      });
+
+      return updatedQuiz;
+    }
+    await this.autoStopQuiz(quiz.quiz_id);
+
+    this.socketService.emitToQuiz(quiz.quiz_id, "quiz:stopped", {
+      quizId: quiz.quiz_id,
+      reason,
+      state: QuizSessionState.ENDED
+    });
+
+    return this.quizRepo.getQuizById(quiz.quiz_id);
+  }
+
+  async autoStopQuiz(quizId: number): Promise<{
+    quizId: number;
+    results: Array<{
+      attemptId: number;
+      score: number;
+      percentage: number;
+    }>;
+  }> {
+    await this.quizRepo.markSessionEnded(quizId);
+    await this.timingService.clearTimer(quizId);
+
+    const activeAttempts =
+      await this.submissionService.getActiveAttemptsForQuiz(quizId);
+
+    const results: Array<{
+      attemptId: number;
+      score: number;
+      percentage: number;
+    }> = [];
+
+    for (const attempt of activeAttempts) {
+      try {
+        const result = await this.submissionService.submitAttempt(
+          attempt.attempt_id,
+          true
+        );
+
+        results.push({
+          attemptId: attempt.attempt_id,
+          score: result.score ?? 0,
+          percentage: result.percentage ?? 0
         });
+      } catch (err) {
+        console.error(
+          `Auto-submit failed for attempt ${attempt.attempt_id}`,
+          err
+        );
+      }
+    }
 
-        return quiz;
+    const quiz = await this.quizRepo.getQuizById(quizId);
+    const snapshot = await this.getMentorSnapshot(quiz);
+
+    this.socketService.emitToQuiz(quizId, "quiz:snapshot_updated", snapshot);
+    this.socketService.emitToQuiz(quizId, 'quiz:stopped', {
+      quizId: quiz.quiz_id,
+      reason: "time_up",
+      state: QuizSessionState.ENDED
+    })
+
+    return { quizId, results };
+  }
+
+  async getQuizState(quiz: Quiz): Promise<Quiz> {
+    return this.quizRepo.getQuizById(quiz.quiz_id);
+  }
+
+  // -----------------------------
+  // CANDIDATE FLOW
+  // -----------------------------
+
+  async canJoinQuiz(user: User, quiz: Quiz): Promise<void> {
+    if (!user.candidate) {
+      throw new Error("Only candidates can join quizzes");
+    }
+
+    const sessionState = await this.quizRepo.getQuizState(quiz.quiz_id);
+
+    if (
+      ![QuizSessionState.ACTIVE, QuizSessionState.PAUSED].includes(sessionState)
+    ) {
+      throw new Error("Quiz is not joinable at this time");
+    }
+
+    // All candidates eligible for now
+  }
+
+  async getMentorSnapshot(quiz: Quiz) {
+    const attemptData = await this.attemptService.getMentorSnapshot(quiz.quiz_id, quiz.start_datetime!);
+
+    const remainingTime = await this.timingService.computeRemainingMs(quiz.quiz_id);
+
+    return {
+      sessionState: quiz.session_state,
+      remainingTime,
+      ...attemptData
+    };
+  }
+
+
+  async createAttempt(user: User, quiz: Quiz): Promise<QuizAttempt> {
+    await this.canJoinQuiz(user, quiz);
+
+    const attempt = await this.attemptService.createOrRestoreAttempt(user, quiz);
+    const snapshot = await this.getMentorSnapshot(quiz);
+
+
+    const attemptQuestions = await this.getAttemptQuestions(attempt.attempt_id, quiz);
+
+    this.socketService.emitToUser(user.user_id, "attempt:created", {
+      attemptId: attempt.attempt_id,
+      quizId: quiz.quiz_id,
+      questions: attemptQuestions.questions,
+      sessionState: attemptQuestions.sessionState,
+      totalQuestions: attemptQuestions.totalQuestions
+    });
+
+    
+
+    this.socketService.emitToQuiz(quiz.quiz_id, "quiz:attempt_joined", {
+      attemptId: attempt.attempt_id,
+      userId: user.user_id
+    });
+
+    this.socketService.emitToQuiz(quiz.quiz_id, "quiz:snapshot_updated", snapshot);
+
+    return attempt;
+  }
+
+
+
+  async getAttemptDetails(attemptId: number) {
+    return this.attemptService.getAttemptWithQuiz(attemptId);
+  }
+
+  async getAttemptQuestions(attemptId: number, quiz: Quiz) {
+    const attempt = this.attemptService.getAttemptWithQuiz(attemptId);
+    if (!attempt) throw new Error("Attempt not found");
+
+    if (!["active", "paused", "ended"].includes(quiz.session_state)) throw new Error("Quiz is not currently accessible");
+
+    const questions = quiz.questions.map(q => ({
+      questionId: q.question_id,
+      text: q.question_text,
+      options: q.options.map(o => ({
+        optionId: o.option_id,
+        text: o.option_text
+      }))
+    }));
+    return {
+
+
+      attemptId: (await attempt).attempt_id,
+      quizId: quiz.quiz_id,
+      sessionState: quiz.session_state,
+      totalQuestions: questions.length,
+      questions
 
     }
 
-    async pauseQuiz(quiz: Quiz) {
-        if(!quiz.canPause()){
-            throw new Error("Quiz cannot be paused");
-        }
 
-        await this.clearStopTimer(quiz.quiz_id);
 
-        // 2. Update DB
+  }
 
-        quiz.session_state = 'paused';
-        quiz.paused_at = new Date();
 
-        await AppDataSource.getRepository(Quiz).save(quiz);
+  async submitAttempt(
+    attemptId: number,
+    auto = false
+  ): Promise<{ attempt: QuizAttempt; score: number; percentage: number }> {
 
-        // 3. Emit event
-        await this.socketService.emitToQuiz(quiz.quiz_id, "quiz_paused", {
-            state: "paused",
-            quizId : quiz.quiz_id,
-            pausedAt: quiz.paused_at,
-        });
+    const result = await this.submissionService.submitAttempt(attemptId, auto);
 
-        return quiz;
+
+    if (result.score !== undefined && result.percentage !== undefined) {
+      this.socketService.emitToAttempt(attemptId, "attempt:submitted", {
+        attemptId,
+        score: result.score,
+        percentage: result.percentage,
+        auto
+      });
     }
 
-    async resumeQuiz(quiz : Quiz) {
+    const attemptWithQuiz = result.attempt;
+    const quiz = attemptWithQuiz!.quiz;
 
-        if(!quiz.canResume()) {
-            throw new Error("Quiz cannot be resumed");
-        }
-        
-        const now = Date.now();
-        const pausedAt = quiz.paused_at?.getTime();
+    const snapshot = await this.getMentorSnapshot(quiz);
 
-        if(pausedAt){
-            const pausedDuration = now - pausedAt;
-            quiz.total_paused_ms! += now -pausedAt;
+    this.socketService.emitToQuiz(quiz.quiz_id, "quiz:snapshot_updated", snapshot);
+    
 
-            quiz.end_datetime = new Date(quiz.end_datetime!.getTime() + pausedDuration)
-        }
-
-        quiz.paused_at = null;
-        quiz.status = "active";
-        quiz.session_state = 'active';
-
-        await AppDataSource.getRepository(Quiz).save(quiz);
-
-        const remainingMs = this.computeRemainingMs(quiz);
-        this.startStopTimer(quiz, remainingMs);
-
-        //  Emit event
-        await this.socketService.emitToQuiz(quiz.quiz_id, "quiz_resumed", {
-            state: "active",
-            quizId :quiz.quiz_id,
-            resumedAt: new Date()
-        });
-
-        return quiz;
-    }
-
-    async stopQuiz(quiz : Quiz, reason: string = "mentor_stopped") {
-
-        if (!quiz.canStop()) {
-            throw new Error("Quiz cannot be stopped");
-        }
-
-        this.clearStopTimer(quiz.quiz_id);
-
-        // Update DB 
-        //quiz.status = "draft";
-        quiz.session_state = 'ended';
-        quiz.end_datetime = new Date();
-
-        await AppDataSource.getRepository(Quiz).save(quiz);
-
-        // 3. Emit event
-        await this.socketService.emitToQuiz(quiz.quiz_id, "quiz_ended", {
-            state: "ended",
-            quizId : quiz.quiz_id,
-            reason,
-            endedAt: quiz.end_datetime
-        });
-
-        // 4. Process submissions and cleanup 
-        this.processQuizEnd(quiz.quiz_id);
-
-        return quiz;
-    }
-
-    // state computation
-
-    async getQuizState(quiz : Quiz) {
-        const now = Date.now();
-
-        const startTime = quiz.start_datetime.getTime();
-        const durationMs = (quiz.duration || 0) * 60 * 1000;
-        const pausedMs = quiz.total_paused_ms ?? 0;
-        const pausedAt = quiz.paused_at?.getTime() ?? null;
-
-        let elapsedMs = 0;
-
-        if(startTime) {
-            elapsedMs = now - startTime - pausedMs;
-            if(pausedAt){
-                elapsedMs -= now - pausedAt;
-            }
-        }
-
-        const remainingMs = Math.max(0, durationMs - elapsedMs);
-
-        let session_state = quiz.session_state;
-        if(quiz.session_state === "active" && remainingMs === 0){
-            session_state = "ended";
-        }
-
-        const totalQuestions = quiz.questions?.length ?? 0;
-
-        const progressRatio = durationMs > 0 ? (durationMs - remainingMs) / durationMs : 0;
-
-        const currentQuestionIndex = session_state === "active" && totalQuestions > 0 ? Math.min(totalQuestions -1, Math.floor(progressRatio * totalQuestions)) : 0;
-
-        console.log( session_state,
-            quiz.quiz_id,
-            currentQuestionIndex,
-        quiz.duration);
-
-        
-
-        // 2. Return combined state
-        return {
-            session_state,
-            quiz_id: quiz.quiz_id,
-            remainingTime : Math.ceil(remainingMs / 1000),
-            currentQuestionIndex,
-            questions : quiz.questions.map( (q,i) => ({
-                question_id : q.question_id,
-                question_text : q.question_text,
-                options : q.options.map( o => ({
-                    option_id : o.option_id,
-                    option_text : o.option_text
-                })) || [],
-                question_number : i + 1,
-                total_questions : totalQuestions
-            })) || [],
-            duration: quiz?.duration,
-            start_datetime: quiz?.start_datetime,
-            end_datetime: quiz?.end_datetime
-        };
-    }
-
-    //              ATTEMPTS
-    async createAttempt(user : User, quiz : Quiz) {
-        
-
-        if (!user?.candidate) {
-            throw new Error("Candidate not found");
-        }
-
-        
-
-        const attemptRepo = AppDataSource.getRepository(QuizAttempt);
-        const attempt = attemptRepo.create({
-            candidate: user.candidate,
-            quiz: quiz,
-            total_questions: quiz.questions?.length ?? 0,
-        });
-
-        const savedAttempt = await attemptRepo.save(attempt);
-
-        // Store in Redis for quick access
-        await redis.hset(`attempt:${savedAttempt.attempt_id}`, {
-            userId : user.user_id,
-            quizId: quiz.quiz_id.toString(),
-            candidateName: user.candidate.full_name,
-            createdAt: new Date().toISOString(),
-            isTemporary: "false"
-        });
-
-        return {
-            attemptId: savedAttempt.attempt_id,
-            candidateName: user.candidate.full_name,
-            quizId : quiz.quiz_id
-        };
-    }
-
-    //          INTERNAL TIMER
-    private startStopTimer(quiz : Quiz, delayMs : number){
-        this.clearStopTimer(quiz.quiz_id);
-
-        const timer = setTimeout( async () => {
-            try {
-                if(quiz.session_state === "active"){
-                    await this.stopQuiz(quiz, "time_up");
-                }
-            } catch (error) {
-                console.error("Stop timer error",error);
-            }
-    },delayMs);
-    this.quizTimers.set(quiz.quiz_id, timer);
-    }
-
-    private clearStopTimer(quizId : number){
-        const timer = this.quizTimers.get(quizId);
-        if(timer){
-            clearTimeout(timer);
-            this.quizTimers.delete(quizId);
-        }
-    }
-
-    private async processQuizEnd(quizId: number) {
-        // Async cleanup - don't wait for this
-        setTimeout(async () => {
-            try {
-                const candidateIds = await redis.smembers(`quiz:${quizId}:candidates`);
-                for (const candidateId of candidateIds) {
-                    const candidateData = await redis.hgetall(`candidate:${candidateId}`);
-                    if (candidateData.userId) {
-                        // Process submission logic here
-                        console.log(`Processing submission for candidate ${candidateId}`);
-                    }
-                }
-
-                // Cleanup Redis after delay
-                setTimeout(async () => {
-                    await redis.del(`quiz:${quizId}:remaining`);
-                    await redis.del(`quiz:${quizId}:status`);
-                    await redis.del(`quiz:${quizId}:currentQuestion`);
-                    await redis.del(`quiz:${quizId}:questions`);
-                    await redis.del(`quiz:${quizId}:timer`);
-                }, 300000); // 5 minutes
-            } catch (error) {
-                console.error("Quiz end processing error:", error);
-            }
-        }, 1000);
-    }
-
-    private computeRemainingMs(quiz: Quiz): number {
-        const now = Date.now();
-        const startTime = quiz.start_datetime?.getTime() ?? null;
-        const durationMs = quiz.duration * 60 * 1000;
-        const pausedMs = quiz.total_paused_ms ?? 0;
-        const pausedAt = quiz.paused_at?.getTime() ?? null;
-
-        if (!startTime) return durationMs;
-
-        let elapsedMs = now - startTime - pausedMs;
-        if (pausedAt) {
-            elapsedMs -= now - pausedAt;
-        }
-
-        return Math.max(0, durationMs - elapsedMs);
-    }
+    return {
+      attempt: result.attempt,
+      score: result.score!,
+      percentage: result.percentage!
+    };
+  }
 
 }
